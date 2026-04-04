@@ -167,42 +167,42 @@ async function run(): Promise<void> {
           'Artifact verification requires an identity bundle (identity-bundle or identity-bundle-json). ' +
           'The allowed-signers mode is not supported for artifact verification.'
         );
-      }
+      } else {
+        const patterns = artifactPathPatterns.join('\n');
+        const globber = await glob.create(patterns, { followSymbolicLinks: false });
+        let files = await globber.glob();
 
-      const patterns = artifactPathPatterns.join('\n');
-      const globber = await glob.create(patterns, { followSymbolicLinks: false });
-      let files = await globber.glob();
+        // Workspace containment check
+        const workspace = path.resolve(process.env.GITHUB_WORKSPACE || process.cwd());
+        files = files.filter(f => {
+          const resolved = path.resolve(f);
+          if (!resolved.startsWith(workspace + path.sep) && resolved !== workspace) {
+            core.warning(`Skipping path outside workspace: ${f}`);
+            return false;
+          }
+          return true;
+        });
 
-      // Workspace containment check
-      const workspace = path.resolve(process.env.GITHUB_WORKSPACE || process.cwd());
-      files = files.filter(f => {
-        const resolved = path.resolve(f);
-        if (!resolved.startsWith(workspace + path.sep) && resolved !== workspace) {
-          core.warning(`Skipping path outside workspace: ${f}`);
-          return false;
+        // Deduplicate
+        files = [...new Set(files)];
+
+        if (files.length === 0) {
+          core.warning('artifact-paths provided but no files matched');
         }
-        return true;
-      });
 
-      // Deduplicate
-      files = [...new Set(files)];
+        for (const file of files) {
+          core.info(`Verifying artifact: ${path.basename(file)}`);
+          const result = await verifyArtifact(
+            authsPath, file, resolvedBundlePath,
+            artifactAttestationDir || undefined
+          );
+          artifactResults.push(result);
 
-      if (files.length === 0) {
-        core.warning('artifact-paths provided but no files matched');
-      }
-
-      for (const file of files) {
-        core.info(`Verifying artifact: ${path.basename(file)}`);
-        const result = await verifyArtifact(
-          authsPath, file, resolvedBundlePath,
-          artifactAttestationDir || undefined
-        );
-        artifactResults.push(result);
-
-        if (result.valid) {
-          core.info(`\u2713 ${path.basename(file)} - verified${result.issuer ? ` (issuer: ${result.issuer})` : ''}`);
-        } else {
-          core.warning(`\u2717 ${path.basename(file)} - ${result.error || 'verification failed'}`);
+          if (result.valid) {
+            core.info(`\u2713 ${path.basename(file)} - verified${result.issuer ? ` (issuer: ${result.issuer})` : ''}`);
+          } else {
+            core.warning(`\u2717 ${path.basename(file)} - ${result.error || 'verification failed'}`);
+          }
         }
       }
     }

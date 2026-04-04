@@ -249,7 +249,7 @@ describe('Artifact verification integration', () => {
     expect(artifactFailures).toHaveLength(0);
   });
 
-  it('requires identity bundle for artifact verification', async () => {
+  it('fails when no identity bundle provided for artifact verification', async () => {
     mockMultilineInputs['artifact-paths'] = ['dist/*.tar.gz'];
     // No identity bundle set — only allowed-signers
     mockInputs['identity-bundle'] = '';
@@ -258,9 +258,10 @@ describe('Artifact verification integration', () => {
 
     await runMain();
 
-    // Should fail with an error about requiring identity bundle
+    // Should hard-fail — silent skip would give false confidence
     const bundleErrors = mockFailed.filter(m => m.includes('identity bundle') || m.includes('Artifact verification requires'));
     expect(bundleErrors.length).toBeGreaterThan(0);
+    expect(mockVerifyArtifact).not.toHaveBeenCalled();
   });
 
   it('handles partial success correctly', async () => {
