@@ -46,17 +46,17 @@ jobs:
           fail-on-unsigned: true
 
   # TODO: Enable after first signed release (just release X.Y.Z runs auths artifact sign dist/index.js)
-  # verify-artifacts:
-  #   runs-on: ubuntu-latest
-  #   needs: build-and-test
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
-  #
-  #     - name: Verify dist/index.js attestation
-  #       uses: ./
-  #       with:
-  #         identity-bundle: ...  # provide bundle path or inline JSON
-  #         artifact-paths: 'dist/index.js'
-  #         fail-on-unattested: true
+  verify-artifacts:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+  
+      - name: Verify dist/index.js attestation
+        uses: ./
+        with:
+          identity-bundle: ...  # provide bundle path or inline JSON
+          artifact-paths: 'dist/index.js'
+          fail-on-unattested: true
