@@ -56,6 +56,6 @@ jobs:
       - name: Verify dist/index.js attestation
         uses: ./
         with:
-          identity-bundle-json: ${{ secrets.AUTHS_CI_IDENTITY_BUNDLE }}
+          identity-bundle-json: ${{ secrets.AUTHS_CI_IDENTITY_BUNDLE_JSON }}
           artifact-paths: 'dist/index.js'
           fail-on-unattested: true

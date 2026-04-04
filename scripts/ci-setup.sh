@@ -142,7 +142,7 @@ else
     echo -e "${GREEN}✓${RESET} CI device linked"
 fi
 
-# --- Step 8: Package identity repo ---
+# --- Step 8: Package identity repo (for release signing) ---
 AUTHS_DIR="${HOME}/.auths"
 echo -e "${DIM}Packaging identity repo...${RESET}"
 
@@ -160,6 +160,17 @@ tar -czf "$BUNDLE_PATH" \
     "$(basename "$AUTHS_DIR")"
 
 IDENTITY_BUNDLE_B64=$(base64 < "$BUNDLE_PATH" | tr -d '\n')
+
+# --- Step 8b: Export identity bundle JSON (for CI artifact verification) ---
+echo -e "${DIM}Exporting identity bundle JSON (1-year TTL)...${RESET}"
+BUNDLE_JSON_PATH="$TMPDIR_WORK/identity-bundle.json"
+auths id export-bundle \
+    --alias ci-release-device \
+    --output "$BUNDLE_JSON_PATH" \
+    --max-age-secs 31536000
+
+IDENTITY_BUNDLE_JSON=$(cat "$BUNDLE_JSON_PATH")
+echo -e "${GREEN}✓${RESET} Identity bundle JSON exported (expires in 1 year)"
 
 # --- Step 9: Set GitHub secrets ---
 echo ""
@@ -186,10 +197,11 @@ if [ "$GH_OK" -eq 1 ]; then
     echo -n "$CI_PASS" | gh secret set AUTHS_CI_PASSPHRASE --repo "$REPO" || GH_OK=0
     echo -n "$KEYCHAIN_B64" | gh secret set AUTHS_CI_KEYCHAIN --repo "$REPO" || GH_OK=0
     echo -n "$IDENTITY_BUNDLE_B64" | gh secret set AUTHS_CI_IDENTITY_BUNDLE --repo "$REPO" || GH_OK=0
+    echo -n "$IDENTITY_BUNDLE_JSON" | gh secret set AUTHS_CI_IDENTITY_BUNDLE_JSON --repo "$REPO" || GH_OK=0
 fi
 
 if [ "$GH_OK" -eq 1 ]; then
-    echo -e "${GREEN}✓${RESET} All 3 secrets set on ${CYAN}${REPO}${RESET}"
+    echo -e "${GREEN}✓${RESET} All 4 secrets set on ${CYAN}${REPO}${RESET}"
 else
     echo -e "${YELLOW}Could not set secrets automatically.${RESET}"
     echo -e "${DIM}Try: gh auth login then re-run, or add manually:${RESET}"
@@ -203,6 +215,9 @@ else
     echo ""
     echo -e "${BOLD}AUTHS_CI_IDENTITY_BUNDLE${RESET}"
     echo "$IDENTITY_BUNDLE_B64"
+    echo ""
+    echo -e "${BOLD}AUTHS_CI_IDENTITY_BUNDLE_JSON${RESET}"
+    echo "$IDENTITY_BUNDLE_JSON"
 fi
 
 echo ""
