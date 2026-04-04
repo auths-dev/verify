@@ -56,7 +56,14 @@ jobs:
           mkdir -p /tmp/auths-identity
           printf '%s' "$AUTHS_CI_IDENTITY_BUNDLE_B64" | tr -d '[:space:]' | base64 -d | tar -xz -C /tmp/auths-identity
 
-          if ! git -C /tmp/auths-identity rev-parse --git-dir > /dev/null 2>&1; then
+          # Find the actual .auths dir (may be nested as .auths/ inside the tarball)
+          if [ -d /tmp/auths-identity/.auths ]; then
+            AUTHS_REPO=/tmp/auths-identity/.auths
+          else
+            AUTHS_REPO=/tmp/auths-identity
+          fi
+
+          if ! git -C "$AUTHS_REPO" rev-parse --git-dir > /dev/null 2>&1; then
             echo "::warning::Skipping artifact signing: AUTHS_CI_IDENTITY_BUNDLE does not contain a valid git repository"
             exit 0
           fi
@@ -64,7 +71,7 @@ jobs:
           auths artifact sign dist/index.js \
             --device-key ci-release-device \
             --note "GitHub Actions release — ${GITHUB_REF_NAME}" \
-            --repo /tmp/auths-identity
+            --repo "$AUTHS_REPO"
 
           echo "Signed dist/index.js → dist/index.js.auths.json"
 
