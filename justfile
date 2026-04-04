@@ -21,11 +21,18 @@ ci: test build check-dist
 sign-dist:
     auths artifact sign dist/index.js
 
-# Cut a release: bump version, commit, then tag+push via release script
+# Cut a release: bump version (if needed), commit, then tag+push via release script
 # The release workflow handles build verification, artifact signing, and GitHub release creation.
 # Usage: just release 1.0.3
 release VERSION: test build
-    npm version {{VERSION}} --no-git-tag-version
-    git add package.json package-lock.json dist/ src/ .github/ justfile
-    git commit -m "build: bump version to {{VERSION}}"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    CURRENT=$(node -p "require('./package.json').version")
+    if [ "$CURRENT" != "{{VERSION}}" ]; then
+      npm version {{VERSION}} --no-git-tag-version
+      git add package.json package-lock.json dist/ src/ .github/ justfile
+      git commit -m "build: bump version to {{VERSION}}"
+    else
+      echo "Version already {{VERSION}}, skipping bump"
+    fi
     python scripts/release.py --push
