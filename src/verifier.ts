@@ -11,7 +11,7 @@ import * as os from 'os';
 // Repository that hosts the public auths CLI releases
 const CLI_RELEASE_REPO = 'auths-dev/auths';
 
-export type FailureType = 'unsigned' | 'unknown_signer' | 'invalid_signature' | 'error';
+export type FailureType = 'unsigned' | 'unknown_signer' | 'invalid_signature' | 'no_attestation' | 'error';
 
 export interface VerificationResult {
   commit: string;
@@ -20,6 +20,19 @@ export interface VerificationResult {
   error?: string;
   skipped?: boolean;
   skipReason?: string;
+  failureType?: FailureType;
+}
+
+export interface ArtifactVerificationResult {
+  file: string;
+  valid: boolean;
+  digestMatch?: boolean;
+  chainValid?: boolean;
+  capabilityValid?: boolean;
+  issuer?: string;
+  commitSha?: string;
+  commitVerified?: boolean;
+  error?: string;
   failureType?: FailureType;
 }
 
@@ -285,6 +298,84 @@ async function verifyCommitsOneByOne(
   }
 
   return results;
+}
+
+/**
+ * Classify an artifact verification error into a structured failure type.
+ */
+export function classifyArtifactError(error: string): FailureType {
+  const e = error.toLowerCase();
+  if (e.includes('signature file') || e.includes('not found') || e.includes('no attestation'))
+    return 'no_attestation';
+  if (e.includes('not in allowed') || e.includes('unknown') || e.includes('no matching'))
+    return 'unknown_signer';
+  if (e.includes('invalid') || e.includes('corrupt') || e.includes('digest') || e.includes('mismatch'))
+    return 'invalid_signature';
+  return 'error';
+}
+
+/**
+ * Verify a single artifact file using `auths artifact verify`.
+ */
+export async function verifyArtifact(
+  authsPath: string,
+  filePath: string,
+  identityBundlePath: string,
+  attestationDir?: string,
+): Promise<ArtifactVerificationResult> {
+  const cliArgs = ['artifact', 'verify', filePath, '--identity-bundle', identityBundlePath, '--json'];
+
+  if (attestationDir) {
+    const basename = path.basename(filePath);
+    const sigPath = path.join(attestationDir, `${basename}.auths.json`);
+    cliArgs.push('--signature', sigPath);
+  }
+
+  try {
+    const result = await exec.getExecOutput(authsPath, cliArgs, {
+      ignoreReturnCode: true,
+      silent: true,
+    });
+
+    if (result.stdout.trim()) {
+      try {
+        const parsed = JSON.parse(result.stdout.trim());
+        return {
+          file: parsed.file || filePath,
+          valid: parsed.valid === true,
+          digestMatch: parsed.digest_match,
+          chainValid: parsed.chain_valid,
+          capabilityValid: parsed.capability_valid,
+          issuer: parsed.issuer,
+          commitSha: parsed.commit_sha,
+          commitVerified: parsed.commit_verified,
+          error: parsed.error,
+          failureType: parsed.error ? classifyArtifactError(parsed.error) : undefined,
+        };
+      } catch {
+        return {
+          file: filePath,
+          valid: false,
+          error: `Failed to parse CLI output: ${result.stdout.trim().substring(0, 200)}`,
+          failureType: 'error',
+        };
+      }
+    }
+
+    return {
+      file: filePath,
+      valid: false,
+      error: result.stderr.trim() || `CLI exited with code ${result.exitCode}`,
+      failureType: 'error',
+    };
+  } catch (error) {
+    return {
+      file: filePath,
+      valid: false,
+      error: error instanceof Error ? error.message : 'Unknown error invoking auths CLI',
+      failureType: 'error',
+    };
+  }
 }
 
 /**

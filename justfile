@@ -17,11 +17,15 @@ check-dist:
 # Run the full CI suite locally: test + build + verify dist
 ci: test build check-dist
 
-# Cut a release: test, build, commit dist, tag, push
+# Sign the dist/index.js artifact locally (creates dist/index.js.auths.json)
+sign-dist:
+    auths artifact sign dist/index.js
+
+# Cut a release: bump version, commit, then tag+push via release script
+# The release workflow handles build verification, artifact signing, and GitHub release creation.
 # Usage: just release 1.0.3
 release VERSION: test build
     npm version {{VERSION}} --no-git-tag-version
-    git add package.json dist/ src/ .github/ justfile
-    git commit -m "Release v{{VERSION}}"
-    git tag "v{{VERSION}}"
-    git push && git push origin "v{{VERSION}}"
+    git add package.json package-lock.json dist/ src/ .github/ justfile
+    git commit -m "build: bump version to {{VERSION}}"
+    python scripts/release.py --push

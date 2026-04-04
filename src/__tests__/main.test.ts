@@ -1,18 +1,55 @@
-// Test getDefaultCommitRange with mocked GitHub context
+// Test getDefaultCommitRange and artifact verification integration with mocked GitHub context
 
 jest.mock('@actions/github', () => ({
   context: {
     eventName: '',
     payload: {},
+    repo: { owner: 'test', repo: 'test-repo' },
   },
+  getOctokit: jest.fn(),
 }));
 
 jest.mock('@actions/exec', () => ({
   exec: jest.fn(),
+  getExecOutput: jest.fn(),
 }));
+
+jest.mock('@actions/core', () => ({
+  getInput: jest.fn(() => ''),
+  getMultilineInput: jest.fn(() => []),
+  getBooleanInput: jest.fn(() => false),
+  setOutput: jest.fn(),
+  setFailed: jest.fn(),
+  info: jest.fn(),
+  warning: jest.fn(),
+  error: jest.fn(),
+  debug: jest.fn(),
+  summary: {
+    addRaw: jest.fn().mockReturnThis(),
+    write: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
+jest.mock('@actions/glob', () => ({
+  create: jest.fn(),
+}));
+
+jest.mock('../verifier', () => {
+  const actual = jest.requireActual('../verifier');
+  return {
+    ...actual,
+    verifyCommits: jest.fn().mockResolvedValue([]),
+    ensureAuthsInstalled: jest.fn().mockResolvedValue('/usr/bin/auths'),
+    verifyArtifact: jest.fn(),
+    runPreflightChecks: jest.fn().mockResolvedValue(undefined),
+  };
+});
 
 import * as github from '@actions/github';
 import * as exec from '@actions/exec';
+import * as core from '@actions/core';
+import * as glob from '@actions/glob';
+import { verifyArtifact, ensureAuthsInstalled } from '../verifier';
 
 // Import after mocks are set up
 import { getDefaultCommitRange } from '../main';

@@ -4,7 +4,8 @@ import * as github from '@actions/github';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { verifyCommits, VerifyOptions, VerificationResult, FailureType, runPreflightChecks } from './verifier';
+import * as glob from '@actions/glob';
+import { verifyCommits, verifyArtifact, VerifyOptions, VerificationResult, ArtifactVerificationResult, FailureType, ensureAuthsInstalled, runPreflightChecks } from './verifier';
 
 async function run(): Promise<void> {
   let tempBundlePath = '';
@@ -20,6 +21,9 @@ async function run(): Promise<void> {
     let commitRange = core.getInput('commit-range');
     const failOnUnsigned = core.getInput('fail-on-unsigned') === 'true';
     const skipMergeCommits = core.getInput('skip-merge-commits') !== 'false';
+    const artifactPathPatterns = core.getMultilineInput('artifact-paths');
+    const artifactAttestationDir = core.getInput('artifact-attestation-dir');
+    const failOnUnattested = core.getInput('fail-on-unattested') !== 'false';
 
     // Validate mutually exclusive inputs
     const hasIdentityBundle = identityBundle.length > 0;
@@ -146,6 +150,77 @@ async function run(): Promise<void> {
     // Fail if required
     if (!allVerified && failOnUnsigned) {
       core.setFailed(`${failed} commit(s) failed signature verification`);
+    }
+
+    // Artifact verification (when artifact-paths is provided)
+    const artifactResults: ArtifactVerificationResult[] = [];
+    if (artifactPathPatterns.length > 0) {
+      const version = core.getInput('auths-version') || '';
+      const authsPath = await ensureAuthsInstalled(version);
+      if (!authsPath) {
+        throw new Error('Failed to find or install auths CLI for artifact verification');
+      }
+
+      // Require identity bundle for artifact verification
+      if (!resolvedBundlePath) {
+        throw new Error(
+          'Artifact verification requires an identity bundle (identity-bundle or identity-bundle-json). ' +
+          'The allowed-signers mode is not supported for artifact verification.'
+        );
+      } else {
+        const patterns = artifactPathPatterns.join('\n');
+        const globber = await glob.create(patterns, { followSymbolicLinks: false });
+        let files = await globber.glob();
+
+        // Workspace containment check
+        const workspace = path.resolve(process.env.GITHUB_WORKSPACE || process.cwd());
+        files = files.filter(f => {
+          const resolved = path.resolve(f);
+          if (!resolved.startsWith(workspace + path.sep) && resolved !== workspace) {
+            core.warning(`Skipping path outside workspace: ${f}`);
+            return false;
+          }
+          return true;
+        });
+
+        // Deduplicate
+        files = [...new Set(files)];
+
+        if (files.length === 0) {
+          core.warning('artifact-paths provided but no files matched');
+        }
+
+        for (const file of files) {
+          core.info(`Verifying artifact: ${path.basename(file)}`);
+          const result = await verifyArtifact(
+            authsPath, file, resolvedBundlePath,
+            artifactAttestationDir || undefined
+          );
+          artifactResults.push(result);
+
+          if (result.valid) {
+            core.info(`\u2713 ${path.basename(file)} - verified${result.issuer ? ` (issuer: ${result.issuer})` : ''}`);
+          } else {
+            core.warning(`\u2717 ${path.basename(file)} - ${result.error || 'verification failed'}`);
+          }
+        }
+      }
+    }
+
+    // Set artifact outputs
+    const allArtifactsVerified = artifactResults.length > 0 && artifactResults.every(r => r.valid);
+    core.setOutput('artifacts-verified', artifactResults.length > 0 ? allArtifactsVerified.toString() : '');
+    core.setOutput('artifact-results', JSON.stringify(artifactResults));
+
+    // Write artifact step summary
+    if (artifactResults.length > 0) {
+      await writeArtifactStepSummary(artifactResults);
+    }
+
+    // Fail on unattested artifacts
+    if (failOnUnattested && artifactResults.some(r => !r.valid)) {
+      const artifactFailCount = artifactResults.filter(r => !r.valid).length;
+      core.setFailed(`${artifactFailCount} artifact(s) failed attestation verification`);
     }
   } catch (error) {
     if (error instanceof Error) {
@@ -363,6 +438,41 @@ export async function getDefaultCommitRange(): Promise<string> {
   }
 
   return 'HEAD^..HEAD';
+}
+
+function buildArtifactSummaryMarkdown(results: ArtifactVerificationResult[]): string {
+  const lines: string[] = [];
+  const passed = results.filter(r => r.valid).length;
+  const failed = results.filter(r => !r.valid).length;
+
+  lines.push('## Auths Artifact Verification');
+  lines.push('');
+  lines.push('| Artifact | Status | Details |');
+  lines.push('|----------|--------|---------|');
+
+  for (const result of results) {
+    const name = path.basename(result.file);
+    if (result.valid) {
+      const issuer = result.issuer || 'verified';
+      lines.push(`| \`${name}\` | \u2705 Verified | Signed by ${issuer} |`);
+    } else {
+      const error = result.error || 'Verification failed';
+      lines.push(`| \`${name}\` | \u274c Failed | ${error} |`);
+    }
+  }
+
+  lines.push('');
+  const emoji = failed === 0 ? '\u2705' : '\u274c';
+  lines.push(`**Result:** ${emoji} ${passed}/${results.length} artifacts verified`);
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+async function writeArtifactStepSummary(results: ArtifactVerificationResult[]): Promise<void> {
+  if (results.length === 0) return;
+  const summary = buildArtifactSummaryMarkdown(results);
+  await core.summary.addRaw(summary).write();
 }
 
 run();

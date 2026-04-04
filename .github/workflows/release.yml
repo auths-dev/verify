@@ -1,3 +1,6 @@
+# Triggered by: python scripts/release.py --push
+# (tags vX.Y.Z and pushes, which triggers this workflow)
+
 name: Release
 
 on:
@@ -13,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -26,31 +31,76 @@ jobs:
       - name: Check dist is up to date
         run: git diff --exit-code -- dist/ ':!dist/**/*.d.ts.map'
 
+      # --- Artifact signing (mirrors auths/auths release workflow) ---
+      - name: Install auths CLI
+        run: |
+          curl -sL https://github.com/auths-dev/auths/releases/latest/download/auths-linux-x86_64.tar.gz | tar xz -C /usr/local/bin
+
+      - name: Sign dist/index.js
+        env:
+          AUTHS_PASSPHRASE: ${{ secrets.AUTHS_CI_PASSPHRASE }}
+          AUTHS_CI_KEYCHAIN_B64: ${{ secrets.AUTHS_CI_KEYCHAIN }}
+          AUTHS_CI_IDENTITY_BUNDLE_B64: ${{ secrets.AUTHS_CI_IDENTITY_BUNDLE }}
+          AUTHS_KEYCHAIN_BACKEND: file
+          AUTHS_KEYCHAIN_FILE: /tmp/auths-ci-keychain
+        run: |
+          if [ -z "$AUTHS_PASSPHRASE" ] || [ -z "$AUTHS_CI_KEYCHAIN_B64" ] || [ -z "$AUTHS_CI_IDENTITY_BUNDLE_B64" ]; then
+            echo "::warning::Skipping artifact signing: AUTHS_CI_PASSPHRASE, AUTHS_CI_KEYCHAIN, and AUTHS_CI_IDENTITY_BUNDLE must all be set"
+            exit 0
+          fi
+
+          printf '%s' "$AUTHS_CI_KEYCHAIN_B64" | tr -d '[:space:]' | base64 -d > /tmp/auths-ci-keychain
+          mkdir -p /tmp/auths-identity
+          printf '%s' "$AUTHS_CI_IDENTITY_BUNDLE_B64" | tr -d '[:space:]' | base64 -d | tar -xz -C /tmp/auths-identity
+
+          if ! git -C /tmp/auths-identity rev-parse --git-dir > /dev/null 2>&1; then
+            echo "::warning::Skipping artifact signing: AUTHS_CI_IDENTITY_BUNDLE does not contain a valid git repository"
+            exit 0
+          fi
+
+          auths artifact sign dist/index.js \
+            --device-key ci-release-device \
+            --note "GitHub Actions release — ${GITHUB_REF_NAME}" \
+            --repo /tmp/auths-identity
+
+          echo "Signed dist/index.js → dist/index.js.auths.json"
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd dist
+          sha256sum index.js > index.js.sha256
+          if [ -f index.js.auths.json ]; then
+            sha256sum index.js.auths.json >> index.js.sha256
+          fi
+          cat index.js.sha256
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           make_latest: true
+          files: |
+            dist/index.js.auths.json
+            dist/index.js.sha256
           body: |
             ## Auths Verify GitHub Action
 
-            Verify commit signatures in your CI pipeline using [Auths](https://github.com/auths-dev/auths) identity keys.
-
-            ### Features
-            - Verifies SSH commit signatures against an allowed signers file or identity bundle
-            - Auto-downloads the `auths` CLI at runtime
-            - SHA256 checksum verification on downloaded binaries
-            - Supports `pull_request` and `push` events with automatic commit range detection
-            - GitHub Step Summary with per-commit verification results
-            - Optional PR comments with fix instructions for unsigned commits
-            - Skips merge commits and GPG-signed commits by default
+            Verify commit signatures and artifact attestations in your CI pipeline using [Auths](https://github.com/auths-dev/auths) identity keys.
 
             ### Usage
 
             ```yaml
-            - uses: auths-dev/auths-verify-github-action@v1
+            - uses: auths-dev/auths-verify-github-action@${{ github.ref_name }}
               with:
                 allowed-signers: '.auths/allowed_signers'
+            ```
+
+            **New: Artifact verification**
+            ```yaml
+            - uses: auths-dev/auths-verify-github-action@${{ github.ref_name }}
+              with:
+                identity-bundle: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
+                artifact-paths: 'dist/*.tar.gz'
             ```
 
             See the [README](https://github.com/auths-dev/auths-verify-github-action#readme) for full configuration options.
