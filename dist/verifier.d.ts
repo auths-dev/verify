@@ -1,4 +1,4 @@
-export type FailureType = 'unsigned' | 'unknown_signer' | 'invalid_signature' | 'error';
+export type FailureType = 'unsigned' | 'unknown_signer' | 'invalid_signature' | 'no_attestation' | 'error';
 export interface VerificationResult {
     commit: string;
     valid: boolean;
@@ -6,6 +6,18 @@ export interface VerificationResult {
     error?: string;
     skipped?: boolean;
     skipReason?: string;
+    failureType?: FailureType;
+}
+export interface ArtifactVerificationResult {
+    file: string;
+    valid: boolean;
+    digestMatch?: boolean;
+    chainValid?: boolean;
+    capabilityValid?: boolean;
+    issuer?: string;
+    commitSha?: string;
+    commitVerified?: boolean;
+    error?: string;
     failureType?: FailureType;
 }
 /**
@@ -26,6 +38,14 @@ export declare function runPreflightChecks(): Promise<void>;
  * Verify commits in the given range using auths verify
  */
 export declare function verifyCommits(commitRange: string, options: VerifyOptions): Promise<VerificationResult[]>;
+/**
+ * Classify an artifact verification error into a structured failure type.
+ */
+export declare function classifyArtifactError(error: string): FailureType;
+/**
+ * Verify a single artifact file using `auths artifact verify`.
+ */
+export declare function verifyArtifact(authsPath: string, filePath: string, identityBundlePath: string, attestationDir?: string): Promise<ArtifactVerificationResult>;
 /**
  * Get list of commits in a range, optionally excluding merge commits
  */

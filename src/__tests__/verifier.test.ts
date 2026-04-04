@@ -1,4 +1,4 @@
-import { getAuthsDownloadUrl, getBinaryName, getCommitsInRange, verifyChecksum, ensureAuthsInstalled } from '../verifier';
+import { getAuthsDownloadUrl, getBinaryName, getCommitsInRange, verifyChecksum, ensureAuthsInstalled, verifyArtifact, classifyArtifactError, ArtifactVerificationResult } from '../verifier';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -23,6 +23,7 @@ jest.mock('@actions/core', () => ({
 
 jest.mock('@actions/exec', () => ({
   exec: jest.fn(),
+  getExecOutput: jest.fn(),
 }));
 
 jest.mock('@actions/io', () => ({
@@ -370,5 +371,182 @@ describe('ensureAuthsInstalled - cross-run caching', () => {
     if (fs.existsSync(extractedDir)) {
       fs.rmSync(extractedDir, { recursive: true });
     }
+  });
+});
+
+describe('classifyArtifactError', () => {
+  it('classifies missing signature file as no_attestation', () => {
+    expect(classifyArtifactError('Failed to read signature file "foo.auths.json": not found')).toBe('no_attestation');
+  });
+
+  it('classifies not found as no_attestation', () => {
+    expect(classifyArtifactError('Attestation not found for artifact')).toBe('no_attestation');
+  });
+
+  it('classifies unknown signer', () => {
+    expect(classifyArtifactError('Signer not in allowed list: unknown identity')).toBe('unknown_signer');
+  });
+
+  it('classifies invalid/corrupt signatures', () => {
+    expect(classifyArtifactError('Invalid attestation signature')).toBe('invalid_signature');
+  });
+
+  it('classifies digest mismatch', () => {
+    expect(classifyArtifactError('Digest mismatch: expected abc got def')).toBe('invalid_signature');
+  });
+
+  it('defaults to error for unrecognized messages', () => {
+    expect(classifyArtifactError('Something totally unexpected happened')).toBe('error');
+  });
+});
+
+describe('verifyArtifact', () => {
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('returns valid result on exit code 0 with valid JSON', async () => {
+    const cliOutput = {
+      file: '/workspace/dist/app.tar.gz',
+      valid: true,
+      digest_match: true,
+      chain_valid: true,
+      capability_valid: true,
+      issuer: 'did:auths:test-user',
+    };
+
+    mockExec.getExecOutput.mockResolvedValue({
+      exitCode: 0,
+      stdout: JSON.stringify(cliOutput),
+      stderr: '',
+    });
+
+    const result = await verifyArtifact('/usr/bin/auths', '/workspace/dist/app.tar.gz', '/tmp/bundle.json');
+
+    expect(result.valid).toBe(true);
+    expect(result.file).toBe('/workspace/dist/app.tar.gz');
+    expect(result.digestMatch).toBe(true);
+    expect(result.chainValid).toBe(true);
+    expect(result.issuer).toBe('did:auths:test-user');
+    expect(result.error).toBeUndefined();
+
+    expect(mockExec.getExecOutput).toHaveBeenCalledWith(
+      '/usr/bin/auths',
+      ['artifact', 'verify', '/workspace/dist/app.tar.gz', '--identity-bundle', '/tmp/bundle.json', '--json'],
+      expect.objectContaining({ ignoreReturnCode: true, silent: true })
+    );
+  });
+
+  it('returns invalid result on exit code 1', async () => {
+    const cliOutput = {
+      file: '/workspace/dist/app.tar.gz',
+      valid: false,
+      digest_match: false,
+      error: 'Digest mismatch',
+    };
+
+    mockExec.getExecOutput.mockResolvedValue({
+      exitCode: 1,
+      stdout: JSON.stringify(cliOutput),
+      stderr: '',
+    });
+
+    const result = await verifyArtifact('/usr/bin/auths', '/workspace/dist/app.tar.gz', '/tmp/bundle.json');
+
+    expect(result.valid).toBe(false);
+    expect(result.digestMatch).toBe(false);
+    expect(result.error).toBe('Digest mismatch');
+    expect(result.failureType).toBe('invalid_signature');
+  });
+
+  it('returns error result on exit code 2', async () => {
+    const cliOutput = {
+      file: '/workspace/dist/app.tar.gz',
+      valid: false,
+      error: 'Failed to read signature file "app.tar.gz.auths.json": No such file',
+    };
+
+    mockExec.getExecOutput.mockResolvedValue({
+      exitCode: 2,
+      stdout: JSON.stringify(cliOutput),
+      stderr: '',
+    });
+
+    const result = await verifyArtifact('/usr/bin/auths', '/workspace/dist/app.tar.gz', '/tmp/bundle.json');
+
+    expect(result.valid).toBe(false);
+    expect(result.failureType).toBe('no_attestation');
+  });
+
+  it('handles JSON parse failure gracefully', async () => {
+    mockExec.getExecOutput.mockResolvedValue({
+      exitCode: 2,
+      stdout: 'Not valid JSON at all',
+      stderr: '',
+    });
+
+    const result = await verifyArtifact('/usr/bin/auths', '/workspace/dist/app.tar.gz', '/tmp/bundle.json');
+
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('Failed to parse CLI output');
+    expect(result.failureType).toBe('error');
+  });
+
+  it('handles empty stdout with stderr', async () => {
+    mockExec.getExecOutput.mockResolvedValue({
+      exitCode: 2,
+      stdout: '',
+      stderr: 'auths: command not found',
+    });
+
+    const result = await verifyArtifact('/usr/bin/auths', '/workspace/dist/app.tar.gz', '/tmp/bundle.json');
+
+    expect(result.valid).toBe(false);
+    expect(result.error).toBe('auths: command not found');
+    expect(result.failureType).toBe('error');
+  });
+
+  it('handles exec exception', async () => {
+    mockExec.getExecOutput.mockRejectedValue(new Error('spawn ENOENT'));
+
+    const result = await verifyArtifact('/usr/bin/auths', '/workspace/dist/app.tar.gz', '/tmp/bundle.json');
+
+    expect(result.valid).toBe(false);
+    expect(result.error).toBe('spawn ENOENT');
+    expect(result.failureType).toBe('error');
+  });
+
+  it('constructs --signature flag when attestationDir provided', async () => {
+    mockExec.getExecOutput.mockResolvedValue({
+      exitCode: 0,
+      stdout: JSON.stringify({ file: '/workspace/dist/app.tar.gz', valid: true }),
+      stderr: '',
+    });
+
+    await verifyArtifact('/usr/bin/auths', '/workspace/dist/app.tar.gz', '/tmp/bundle.json', '/attestations');
+
+    expect(mockExec.getExecOutput).toHaveBeenCalledWith(
+      '/usr/bin/auths',
+      [
+        'artifact', 'verify', '/workspace/dist/app.tar.gz',
+        '--identity-bundle', '/tmp/bundle.json',
+        '--json',
+        '--signature', expect.stringContaining('app.tar.gz.auths.json'),
+      ],
+      expect.any(Object)
+    );
+  });
+
+  it('does not include --signature when no attestationDir', async () => {
+    mockExec.getExecOutput.mockResolvedValue({
+      exitCode: 0,
+      stdout: JSON.stringify({ file: '/workspace/dist/app.tar.gz', valid: true }),
+      stderr: '',
+    });
+
+    await verifyArtifact('/usr/bin/auths', '/workspace/dist/app.tar.gz', '/tmp/bundle.json');
+
+    const callArgs = mockExec.getExecOutput.mock.calls[0][1];
+    expect(callArgs).not.toContain('--signature');
   });
 });

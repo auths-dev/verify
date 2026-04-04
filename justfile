@@ -17,9 +17,13 @@ check-dist:
 # Run the full CI suite locally: test + build + verify dist
 ci: test build check-dist
 
-# Cut a release: test, build, commit dist, tag, push
+# Sign the dist/index.js artifact (creates dist/index.js.auths.json)
+sign-dist:
+    auths artifact sign dist/index.js
+
+# Cut a release: test, build, sign artifact, commit dist, tag, push
 # Usage: just release 1.0.3
-release VERSION: test build
+release VERSION: test build sign-dist
     npm version {{VERSION}} --no-git-tag-version
     git add package.json dist/ src/ .github/ justfile
     git commit -m "Release v{{VERSION}}"

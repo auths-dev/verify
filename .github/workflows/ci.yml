@@ -44,3 +44,15 @@ jobs:
         uses: ./
         with:
           fail-on-unsigned: true
+
+  verify-artifacts:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify dist/index.js attestation
+        uses: ./
+        with:
+          artifact-paths: 'dist/index.js'
+          fail-on-unattested: false
