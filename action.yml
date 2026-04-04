@@ -39,6 +39,18 @@ inputs:
     description: 'GitHub token used to post the PR comment (required when post-pr-comment is true)'
     required: false
     default: ''
+  artifact-paths:
+    description: 'Glob patterns for artifact files to verify, one per line (e.g., "dist/*.tar.gz")'
+    required: false
+    default: ''
+  artifact-attestation-dir:
+    description: 'Directory containing .auths.json attestation files (default: alongside artifacts)'
+    required: false
+    default: ''
+  fail-on-unattested:
+    description: 'Fail the action if any artifact lacks a valid attestation'
+    required: false
+    default: 'true'
 
 outputs:
   verified:
@@ -51,6 +63,10 @@ outputs:
     description: 'Number of commits that passed verification'
   failed:
     description: 'Number of commits that failed verification'
+  artifacts-verified:
+    description: 'Whether all artifacts were verified (true/false)'
+  artifact-results:
+    description: 'JSON array of per-artifact verification results'
 
 runs:
   using: 'node20'
