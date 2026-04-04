@@ -34,7 +34,10 @@ jobs:
       # --- Artifact signing (mirrors auths/auths release workflow) ---
       - name: Install auths CLI
         run: |
-          curl -sL https://github.com/auths-dev/auths/releases/latest/download/auths-linux-x86_64.tar.gz | tar xz -C /usr/local/bin
+          mkdir -p /tmp/auths-install
+          curl -sL https://github.com/auths-dev/auths/releases/latest/download/auths-linux-x86_64.tar.gz | tar xz -C /tmp/auths-install
+          sudo cp /tmp/auths-install/auths /usr/local/bin/auths
+          rm -rf /tmp/auths-install
 
       - name: Sign dist/index.js
         env:

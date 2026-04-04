@@ -17,15 +17,26 @@ check-dist:
 # Run the full CI suite locally: test + build + verify dist
 ci: test build check-dist
 
+# Set up CI secrets for release artifact signing (one-time)
+ci-setup:
+    bash scripts/ci-setup.sh
+
 # Sign the dist/index.js artifact locally (creates dist/index.js.auths.json)
 sign-dist:
     auths artifact sign dist/index.js
 
-# Cut a release: bump version, commit, then tag+push via release script
+# Cut a release: bump version (if needed), commit, then tag+push via release script
 # The release workflow handles build verification, artifact signing, and GitHub release creation.
 # Usage: just release 1.0.3
 release VERSION: test build
-    npm version {{VERSION}} --no-git-tag-version
-    git add package.json package-lock.json dist/ src/ .github/ justfile
-    git commit -m "build: bump version to {{VERSION}}"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    CURRENT=$(node -p "require('./package.json').version")
+    if [ "$CURRENT" != "{{VERSION}}" ]; then
+      npm version {{VERSION}} --no-git-tag-version
+      git add package.json package-lock.json dist/ src/ .github/ justfile
+      git commit -m "build: bump version to {{VERSION}}"
+    else
+      echo "Version already {{VERSION}}, skipping bump"
+    fi
     python scripts/release.py --push
