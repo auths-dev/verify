@@ -75,6 +75,16 @@ jobs:
 
           echo "Signed dist/index.js → dist/index.js.auths.json"
 
+      # --- Verify the artifact we just signed (dogfood) ---
+      - name: Verify dist/index.js attestation
+        if: hashFiles('dist/index.js.auths.json') != ''
+        uses: ./
+        with:
+          identity-bundle-json: ${{ secrets.AUTHS_CI_IDENTITY_BUNDLE_JSON }}
+          artifact-paths: 'dist/index.js'
+          fail-on-unattested: true
+          fail-on-unsigned: false
+
       - name: Generate SHA256 checksums
         run: |
           cd dist
