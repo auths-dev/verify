@@ -71413,11 +71413,11 @@ async function run() {
         // Run pre-flight checks (shallow clone, ssh-keygen)
         await (0, verifier_1.runPreflightChecks)();
         // Get inputs
-        const identityInput = core.getInput('identity');
-        let commitRange = core.getInput('commit-range');
+        const identityInput = core.getInput('token');
+        let commitRange = core.getInput('commits');
         const failOnUnsigned = core.getInput('fail-on-unsigned') === 'true';
         const skipMergeCommits = core.getInput('skip-merge-commits') !== 'false';
-        const artifactPathPatterns = core.getMultilineInput('artifact-paths');
+        const artifactPathPatterns = core.getMultilineInput('files');
         const artifactAttestationDir = core.getInput('artifact-attestation-dir');
         const failOnUnattested = core.getInput('fail-on-unattested') !== 'false';
         // Resolve identity (auto-detects format)
@@ -71561,7 +71561,7 @@ async function run() {
                 // Deduplicate
                 files = [...new Set(files)];
                 if (files.length === 0) {
-                    core.warning('artifact-paths provided but no files matched');
+                    core.warning('files provided but no artifacts matched');
                 }
                 for (const file of files) {
                     core.info(`Verifying artifact: ${path.basename(file)}`);

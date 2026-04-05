@@ -1,6 +1,6 @@
 # Auths Verify Action
 
-Verify commit signatures using [Auths](https://github.com/auths-dev/auths) identity keys. Ensures every commit in a PR or push is cryptographically signed by an authorized developer.
+Verify commit signatures using [Auths](https://github.com/auths-dev/auths) token keys. Ensures every commit in a PR or push is cryptographically signed by an authorized developer.
 
 ## Quickstart
 
@@ -11,7 +11,7 @@ Verify commit signatures using [Auths](https://github.com/auths-dev/auths) ident
 - uses: auths-dev/verify@v1
 ```
 
-That's it. The action auto-detects the commit range from the GitHub event (PR or push), downloads the `auths` CLI, and verifies each commit. Identity is auto-detected from the `identity` input (defaults to `.auths/allowed_signers`).
+That's it. The action auto-detects the commit range from the GitHub event (PR or push), downloads the `auths` CLI, and verifies each commit. Identity is auto-detected from the `token` input (defaults to `.auths/allowed_signers`).
 
 ## Features
 
@@ -29,18 +29,18 @@ That's it. The action auto-detects the commit range from the GitHub event (PR or
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `identity` | Identity for verification. Accepts: CI token JSON, identity bundle JSON, file path to bundle, or path to allowed_signers file | No | `.auths/allowed_signers` (auto) |
-| `commit-range` | Git commit range to verify (e.g. `HEAD~5..HEAD`) | No | Auto-detected from event |
+| `token` | Identity for verification. Accepts: CI token JSON, identity bundle JSON, file path to bundle, or path to allowed_signers file | No | `.auths/allowed_signers` (auto) |
+| `commits` | Git commit range to verify (e.g. `HEAD~5..HEAD`) | No | Auto-detected from event |
 | `auths-version` | Auths CLI version to use (e.g. `0.5.0`) | No | `''` (latest) |
 | `fail-on-unsigned` | Whether to fail the action if unsigned commits are found | No | `true` |
 | `skip-merge-commits` | Whether to skip merge commits during verification | No | `true` |
 | `post-pr-comment` | Post a PR comment with results and fix instructions (requires `pull-requests: write`) | No | `false` |
 | `github-token` | GitHub token for posting the PR comment (required when `post-pr-comment: true`) | No | `''` |
-| `artifact-paths` | Glob patterns for artifact files to verify, one per line | No | `''` |
+| `files` | Glob patterns for artifact files to verify, one per line | No | `''` |
 | `artifact-attestation-dir` | Directory containing `.auths.json` attestation files | No | `''` |
 | `fail-on-unattested` | Fail the action if any artifact lacks a valid attestation | No | `true` |
 
-The `identity` input auto-detects the format. When empty, it defaults to the `.auths/allowed_signers` file. When only `artifact-paths` is set with an identity bundle, commit verification is skipped automatically.
+The `token` input auto-detects the format. When empty, it defaults to the `.auths/allowed_signers` file. When only `files` is set with an identity bundle, commit verification is skipped automatically.
 
 ## Outputs
 
@@ -54,11 +54,11 @@ The `identity` input auto-detects the format. When empty, it defaults to the `.a
 
 ## Verification Modes
 
-The `identity` input auto-detects the format:
+The `token` input auto-detects the format:
 
 ### Allowed Signers File (default)
 
-Commit the team's public keys to your repo. When `identity` is empty, the action looks for `.auths/allowed_signers`:
+Commit the team's public keys to your repo. When `token` is empty, the action looks for `.auths/allowed_signers`:
 
 ```
 # .auths/allowed_signers
@@ -75,7 +75,7 @@ Or pass a custom path:
 ```yaml
 - uses: auths-dev/verify@v1
   with:
-    identity: 'path/to/allowed_signers'
+    token: 'path/to/allowed_signers'
 ```
 
 ### Identity Bundle (stateless CI)
@@ -92,7 +92,7 @@ Then pass the secret directly — the action detects the JSON format automatical
 ```yaml
 - uses: auths-dev/verify@v1
   with:
-    identity: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
+    token: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
 ```
 
 Or commit the bundle (it contains only public data) and reference the file:
@@ -100,7 +100,7 @@ Or commit the bundle (it contains only public data) and reference the file:
 ```yaml
 - uses: auths-dev/verify@v1
   with:
-    identity: '.auths/identity-bundle.json'
+    token: '.auths/token-bundle.json'
 ```
 
 ## Example Workflows
@@ -141,7 +141,7 @@ jobs:
 
       - uses: auths-dev/verify@v1
         with:
-          identity: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
+          token: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
 ```
 
 ### Non-blocking (Warn Only)
@@ -215,7 +215,7 @@ jobs:
 
       - uses: auths-dev/verify@v1
         with:
-          identity: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
+          token: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
           fail-on-unsigned: ${{ inputs.mode == 'enforce' && 'true' || 'false' }}
 ```
 
@@ -254,6 +254,6 @@ Apache-2.0. See [LICENSE](LICENSE).
 
 ## Links
 
-- [Auths](https://github.com/auths-dev/auths) - Decentralized identity for developers
+- [Auths](https://github.com/auths-dev/auths) - Decentralized token for developers
 - [Auths CLI](https://github.com/auths-dev/auths/tree/main/crates/auths-cli) - Command-line tool
 - [Signing commits with Auths](https://github.com/auths-dev/auths#readme) - Setup guide

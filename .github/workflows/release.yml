@@ -79,8 +79,8 @@ jobs:
         if: hashFiles('dist/index.js.auths.json') != ''
         uses: ./
         with:
-          identity: /tmp/auths-verify-bundle.json
-          artifact-paths: 'dist/index.js'
+          token: /tmp/auths-verify-bundle.json
+          files: 'dist/index.js'
           fail-on-unattested: true
           fail-on-unsigned: false
 
