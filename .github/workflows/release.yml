@@ -109,17 +109,17 @@ jobs:
             ### Usage
 
             ```yaml
-            - uses: auths-dev/verify@${{ github.ref_name }}
+            - uses: auths-dev/verify@v1
               with:
-                identity: '.auths/allowed_signers'
+                token: '.auths/allowed_signers'
             ```
 
             **New: Artifact verification**
             ```yaml
-            - uses: auths-dev/verify@${{ github.ref_name }}
+            - uses: auths-dev/verify@v1
               with:
-                identity: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
-                artifact-paths: 'dist/*.tar.gz'
+                token: $\{{ secrets.AUTHS_CI_TOKEN }}
+                files: 'dist/*.tar.gz'
             ```
 
             See the [README](https://github.com/auths-dev/verify#readme) for full configuration options.
