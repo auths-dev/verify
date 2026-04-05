@@ -19,7 +19,7 @@ ci: test build check-dist
 
 # Set up CI secrets for release artifact signing (one-time)
 ci-setup:
-    bash scripts/ci-setup.sh
+    auths ci setup
 
 # Sign the dist/index.js artifact locally (creates dist/index.js.auths.json)
 sign-dist:
