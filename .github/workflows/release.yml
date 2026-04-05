@@ -41,46 +41,45 @@ jobs:
 
       - name: Sign dist/index.js
         env:
-          AUTHS_PASSPHRASE: ${{ secrets.AUTHS_CI_PASSPHRASE }}
-          AUTHS_CI_KEYCHAIN_B64: ${{ secrets.AUTHS_CI_KEYCHAIN }}
-          AUTHS_CI_IDENTITY_BUNDLE_B64: ${{ secrets.AUTHS_CI_IDENTITY_BUNDLE }}
+          AUTHS_CI_TOKEN: ${{ secrets.AUTHS_CI_TOKEN }}
           AUTHS_KEYCHAIN_BACKEND: file
           AUTHS_KEYCHAIN_FILE: /tmp/auths-ci-keychain
         run: |
-          if [ -z "$AUTHS_PASSPHRASE" ] || [ -z "$AUTHS_CI_KEYCHAIN_B64" ] || [ -z "$AUTHS_CI_IDENTITY_BUNDLE_B64" ]; then
-            echo "::warning::Skipping artifact signing: AUTHS_CI_PASSPHRASE, AUTHS_CI_KEYCHAIN, and AUTHS_CI_IDENTITY_BUNDLE must all be set"
+          if [ -z "$AUTHS_CI_TOKEN" ]; then
+            echo "::warning::Skipping artifact signing: AUTHS_CI_TOKEN not set (run 'auths ci setup' to configure)"
             exit 0
           fi
 
-          printf '%s' "$AUTHS_CI_KEYCHAIN_B64" | tr -d '[:space:]' | base64 -d > /tmp/auths-ci-keychain
+          # Extract fields from the single CI token
+          AUTHS_PASSPHRASE=$(echo "$AUTHS_CI_TOKEN" | jq -r '.passphrase')
+          echo "::add-mask::$AUTHS_PASSPHRASE"
+          export AUTHS_PASSPHRASE
+
+          echo "$AUTHS_CI_TOKEN" | jq -r '.keychain' | base64 -d > /tmp/auths-ci-keychain
           mkdir -p /tmp/auths-identity
-          printf '%s' "$AUTHS_CI_IDENTITY_BUNDLE_B64" | tr -d '[:space:]' | base64 -d | tar -xz -C /tmp/auths-identity
+          echo "$AUTHS_CI_TOKEN" | jq -r '.identity_repo' | base64 -d | tar -xz -C /tmp/auths-identity
 
-          # Find the actual .auths dir (may be nested as .auths/ inside the tarball)
-          if [ -d /tmp/auths-identity/.auths ]; then
-            AUTHS_REPO=/tmp/auths-identity/.auths
-          else
-            AUTHS_REPO=/tmp/auths-identity
-          fi
-
-          if ! git -C "$AUTHS_REPO" rev-parse --git-dir > /dev/null 2>&1; then
-            echo "::warning::Skipping artifact signing: AUTHS_CI_IDENTITY_BUNDLE does not contain a valid git repository"
+          if ! git -C /tmp/auths-identity rev-parse --git-dir > /dev/null 2>&1; then
+            echo "::warning::Skipping artifact signing: identity repo in AUTHS_CI_TOKEN is not a valid git repository"
             exit 0
           fi
 
           auths artifact sign dist/index.js \
             --device-key ci-release-device \
             --note "GitHub Actions release — ${GITHUB_REF_NAME}" \
-            --repo "$AUTHS_REPO"
+            --repo /tmp/auths-identity
 
           echo "Signed dist/index.js → dist/index.js.auths.json"
+
+          # Write verify bundle for next step
+          echo "$AUTHS_CI_TOKEN" | jq -r '.verify_bundle' > /tmp/auths-verify-bundle.json
 
       # --- Verify the artifact we just signed (dogfood) ---
       - name: Verify dist/index.js attestation
         if: hashFiles('dist/index.js.auths.json') != ''
         uses: ./
         with:
-          identity: ${{ secrets.AUTHS_CI_IDENTITY_BUNDLE_JSON }}
+          identity: /tmp/auths-verify-bundle.json
           artifact-paths: 'dist/index.js'
           fail-on-unattested: true
           fail-on-unsigned: false
