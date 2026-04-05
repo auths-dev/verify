@@ -80,7 +80,7 @@ jobs:
         if: hashFiles('dist/index.js.auths.json') != ''
         uses: ./
         with:
-          identity-bundle-json: ${{ secrets.AUTHS_CI_IDENTITY_BUNDLE_JSON }}
+          identity: ${{ secrets.AUTHS_CI_IDENTITY_BUNDLE_JSON }}
           artifact-paths: 'dist/index.js'
           fail-on-unattested: true
           fail-on-unsigned: false
@@ -110,20 +110,20 @@ jobs:
             ### Usage
 
             ```yaml
-            - uses: auths-dev/auths-verify-github-action@${{ github.ref_name }}
+            - uses: auths-dev/verify@${{ github.ref_name }}
               with:
-                allowed-signers: '.auths/allowed_signers'
+                identity: '.auths/allowed_signers'
             ```
 
             **New: Artifact verification**
             ```yaml
-            - uses: auths-dev/auths-verify-github-action@${{ github.ref_name }}
+            - uses: auths-dev/verify@${{ github.ref_name }}
               with:
-                identity-bundle: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
+                identity: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
                 artifact-paths: 'dist/*.tar.gz'
             ```
 
-            See the [README](https://github.com/auths-dev/auths-verify-github-action#readme) for full configuration options.
+            See the [README](https://github.com/auths-dev/verify#readme) for full configuration options.
 
       - name: Update floating major tag
         run: |
