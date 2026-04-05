@@ -27,7 +27,7 @@ sign-dist:
 
 # Cut a release: bump version (if needed), commit, then tag+push via release script
 # The release workflow handles build verification, artifact signing, and GitHub release creation.
-# Usage: just release 1.0.3
+# Usage: just release 1.0.0
 release VERSION: test build
     #!/usr/bin/env bash
     set -euo pipefail
