@@ -29,7 +29,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_JSON = REPO_ROOT / "package.json"
 NPM_PACKAGE = "@auths/verify-action"
-GITHUB_REPO = "auths-dev/auths-verify-github-action"
+GITHUB_REPO = "auths-dev/verify"
 
 
 def get_package_version() -> str:

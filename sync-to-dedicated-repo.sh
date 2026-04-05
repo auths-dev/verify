@@ -4,12 +4,12 @@ set -euo pipefail
 # Sync verify-action from the auths monorepo to the dedicated repo.
 #
 # Usage:
-#   ./sync-to-dedicated-repo.sh /path/to/auths-verify-github-action
+#   ./sync-to-dedicated-repo.sh /path/to/verify
 #
 # This copies source files and builds dist/index.js in the target repo.
 # Run this before tagging a new release in the dedicated repo.
 
-TARGET="${1:?Usage: $0 /path/to/auths-verify-github-action}"
+TARGET="${1:?Usage: $0 /path/to/verify}"
 SOURCE="$(cd "$(dirname "$0")" && pwd)"
 
 if [ ! -d "$TARGET/.git" ]; then

@@ -71345,6 +71345,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.resolveIdentity = resolveIdentity;
 exports.getDefaultCommitRange = getDefaultCommitRange;
 const core = __importStar(__nccwpck_require__(37484));
 const exec = __importStar(__nccwpck_require__(95236));
@@ -71354,39 +71355,75 @@ const os = __importStar(__nccwpck_require__(70857));
 const path = __importStar(__nccwpck_require__(16928));
 const glob = __importStar(__nccwpck_require__(47206));
 const verifier_1 = __nccwpck_require__(32217);
+function resolveIdentity(input) {
+    // Empty → default to allowed-signers file
+    if (!input) {
+        return {
+            mode: 'allowed-signers',
+            allowedSignersPath: '.auths/allowed_signers',
+            identityBundlePath: '',
+        };
+    }
+    const trimmed = input.trim();
+    // Try parsing as JSON
+    if (trimmed.startsWith('{')) {
+        try {
+            const parsed = JSON.parse(trimmed);
+            // CiToken format (has version + verify_bundle)
+            if (parsed.version && parsed.verify_bundle) {
+                const bundlePath = path.join(os.tmpdir(), `auths-bundle-${Date.now()}.json`);
+                fs.writeFileSync(bundlePath, JSON.stringify(parsed.verify_bundle));
+                return { mode: 'identity-bundle', allowedSignersPath: '', identityBundlePath: bundlePath, tempFile: bundlePath };
+            }
+            // Raw identity bundle JSON (has identity_did)
+            if (parsed.identity_did) {
+                const bundlePath = path.join(os.tmpdir(), `auths-bundle-${Date.now()}.json`);
+                fs.writeFileSync(bundlePath, trimmed);
+                return { mode: 'identity-bundle', allowedSignersPath: '', identityBundlePath: bundlePath, tempFile: bundlePath };
+            }
+            throw new Error('JSON input does not look like an identity bundle or CI token');
+        }
+        catch (e) {
+            if (e instanceof SyntaxError) {
+                // Not valid JSON — fall through to file path
+            }
+            else {
+                throw e;
+            }
+        }
+    }
+    // File path — check if it looks like an allowed-signers file or a bundle
+    if (fs.existsSync(trimmed)) {
+        try {
+            const content = fs.readFileSync(trimmed, 'utf8').trim();
+            if (content.startsWith('{')) {
+                return { mode: 'identity-bundle', allowedSignersPath: '', identityBundlePath: trimmed };
+            }
+        }
+        catch { /* not readable as text */ }
+        // Default: treat as allowed-signers path
+        return { mode: 'allowed-signers', allowedSignersPath: trimmed, identityBundlePath: '' };
+    }
+    // Doesn't exist as a file — assume it's inline JSON that failed to parse
+    throw new Error(`Invalid identity input: not valid JSON and file not found at "${trimmed}"`);
+}
 async function run() {
     let tempBundlePath = '';
     try {
         // Run pre-flight checks (shallow clone, ssh-keygen)
         await (0, verifier_1.runPreflightChecks)();
         // Get inputs
-        const allowedSigners = core.getInput('allowed-signers');
-        const identityBundle = core.getInput('identity-bundle');
-        const identityBundleJson = core.getInput('identity-bundle-json');
+        const identityInput = core.getInput('identity');
         let commitRange = core.getInput('commit-range');
         const failOnUnsigned = core.getInput('fail-on-unsigned') === 'true';
         const skipMergeCommits = core.getInput('skip-merge-commits') !== 'false';
         const artifactPathPatterns = core.getMultilineInput('artifact-paths');
         const artifactAttestationDir = core.getInput('artifact-attestation-dir');
         const failOnUnattested = core.getInput('fail-on-unattested') !== 'false';
-        // Validate mutually exclusive inputs
-        const hasIdentityBundle = identityBundle.length > 0;
-        const hasIdentityBundleJson = identityBundleJson.length > 0;
-        const hasCustomAllowedSigners = allowedSigners !== '.auths/allowed_signers' && allowedSigners.length > 0;
-        if ((hasIdentityBundle || hasIdentityBundleJson) && hasCustomAllowedSigners) {
-            throw new Error('Cannot use both allowed-signers and identity-bundle/identity-bundle-json. Choose one verification mode.');
-        }
-        if (hasIdentityBundle && hasIdentityBundleJson) {
-            throw new Error('Cannot use both identity-bundle (file path) and identity-bundle-json (inline JSON). Choose one.');
-        }
-        // Resolve identity bundle path
-        let resolvedBundlePath = identityBundle;
-        if (hasIdentityBundleJson) {
-            tempBundlePath = path.join(os.tmpdir(), `auths-bundle-${Date.now()}.json`);
-            fs.writeFileSync(tempBundlePath, identityBundleJson, 'utf8');
-            resolvedBundlePath = tempBundlePath;
-            core.info('Using identity bundle from inline JSON input');
-        }
+        // Resolve identity (auto-detects format)
+        const resolved = resolveIdentity(identityInput);
+        const resolvedBundlePath = resolved.identityBundlePath;
+        tempBundlePath = resolved.tempFile || '';
         // Determine commit range if not provided
         if (!commitRange) {
             commitRange = await getDefaultCommitRange();
@@ -71403,85 +71440,100 @@ async function run() {
                 return;
             }
         }
-        const verificationMode = resolvedBundlePath ? 'identity-bundle' : 'allowed-signers';
-        core.info(`Verifying commits in range: ${commitRange}`);
-        core.info(`Verification mode: ${verificationMode}`);
-        if (skipMergeCommits) {
-            core.info('Merge commits will be skipped');
-        }
-        // Build options
-        const options = {
-            allowedSignersPath: allowedSigners,
-            identityBundlePath: resolvedBundlePath,
-            skipMergeCommits,
-        };
-        // Run verification
-        const results = await (0, verifier_1.verifyCommits)(commitRange, options);
-        // Calculate statistics
-        const total = results.length;
-        const skipped = results.filter(r => r.skipped).length;
-        const passed = results.filter(r => r.valid && !r.skipped).length;
-        const failed = results.filter(r => !r.valid).length;
-        const allVerified = failed === 0;
-        // Set outputs
-        core.setOutput('verified', allVerified.toString());
-        core.setOutput('results', JSON.stringify(results));
-        core.setOutput('total', total.toString());
-        core.setOutput('passed', passed.toString());
-        core.setOutput('failed', failed.toString());
-        // Log results
-        core.info('');
-        core.info('=== Verification Results ===');
-        for (const result of results) {
-            if (result.skipped) {
-                core.info(`\u2192 ${result.commit} - skipped (${result.skipReason})`);
+        // Auto-detect verification mode
+        const hasArtifactPaths = artifactPathPatterns.length > 0;
+        const verifyCommitsMode = !(hasArtifactPaths && resolved.mode === 'identity-bundle' && !fs.existsSync('.auths/allowed_signers'));
+        // Commit verification
+        let allVerified = true;
+        if (verifyCommitsMode) {
+            core.info(`Verifying commits in range: ${commitRange}`);
+            core.info(`Verification mode: ${resolved.mode}`);
+            if (skipMergeCommits) {
+                core.info('Merge commits will be skipped');
             }
-            else if (result.valid) {
-                const signer = result.signer || 'N/A';
-                core.info(`\u2713 ${result.commit} - signed by ${signer}`);
+            // Build options
+            const options = {
+                allowedSignersPath: resolved.allowedSignersPath,
+                identityBundlePath: resolvedBundlePath,
+                skipMergeCommits,
+            };
+            // Run verification
+            const results = await (0, verifier_1.verifyCommits)(commitRange, options);
+            // Calculate statistics
+            const total = results.length;
+            const skipped = results.filter(r => r.skipped).length;
+            const passed = results.filter(r => r.valid && !r.skipped).length;
+            const failed = results.filter(r => !r.valid).length;
+            allVerified = failed === 0;
+            // Set outputs
+            core.setOutput('verified', allVerified.toString());
+            core.setOutput('results', JSON.stringify(results));
+            core.setOutput('total', total.toString());
+            core.setOutput('passed', passed.toString());
+            core.setOutput('failed', failed.toString());
+            // Log results
+            core.info('');
+            core.info('=== Verification Results ===');
+            for (const result of results) {
+                if (result.skipped) {
+                    core.info(`\u2192 ${result.commit} - skipped (${result.skipReason})`);
+                }
+                else if (result.valid) {
+                    const signer = result.signer || 'N/A';
+                    core.info(`\u2713 ${result.commit} - signed by ${signer}`);
+                }
+                else {
+                    const error = result.error || 'unknown error';
+                    core.warning(`\u2717 ${result.commit} - ${error}`);
+                }
             }
-            else {
-                const error = result.error || 'unknown error';
-                core.warning(`\u2717 ${result.commit} - ${error}`);
+            core.info('');
+            core.info(`Total: ${total}, Passed: ${passed}, Skipped: ${skipped}, Failed: ${failed}`);
+            // Write GitHub Step Summary
+            await writeStepSummary(results, passed, skipped, failed, total);
+            // Per-failure-type guidance whenever any commit fails
+            if (failed > 0) {
+                const failedResults = results.filter(r => !r.valid);
+                // Determine dominant failure type (most common)
+                const typeCounts = {};
+                for (const r of failedResults) {
+                    const t = r.failureType ?? 'error';
+                    typeCounts[t] = (typeCounts[t] ?? 0) + 1;
+                }
+                const dominantType = (Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0][0]);
+                const firstFailed = failedResults[0];
+                core.warning(fixMessageForType(dominantType, firstFailed.commit, failed));
+            }
+            // Opt-in PR comment
+            const postPrComment = core.getInput('post-pr-comment') === 'true';
+            if (postPrComment && github.context.eventName === 'pull_request') {
+                const token = core.getInput('github-token', { required: true });
+                const octokit = github.getOctokit(token);
+                const prNumber = github.context.payload.pull_request.number;
+                const commentBody = buildPrCommentBody(results, passed, skipped, failed, total);
+                await octokit.rest.issues.createComment({
+                    ...github.context.repo,
+                    issue_number: prNumber,
+                    body: commentBody,
+                });
+            }
+            // Fail if required
+            if (!allVerified && failOnUnsigned) {
+                core.setFailed(`${failed} commit(s) failed signature verification`);
             }
         }
-        core.info('');
-        core.info(`Total: ${total}, Passed: ${passed}, Skipped: ${skipped}, Failed: ${failed}`);
-        // Write GitHub Step Summary
-        await writeStepSummary(results, passed, skipped, failed, total);
-        // Per-failure-type guidance whenever any commit fails
-        if (failed > 0) {
-            const failedResults = results.filter(r => !r.valid);
-            // Determine dominant failure type (most common)
-            const typeCounts = {};
-            for (const r of failedResults) {
-                const t = r.failureType ?? 'error';
-                typeCounts[t] = (typeCounts[t] ?? 0) + 1;
-            }
-            const dominantType = (Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0][0]);
-            const firstFailed = failedResults[0];
-            core.warning(fixMessageForType(dominantType, firstFailed.commit, failed));
-        }
-        // Opt-in PR comment
-        const postPrComment = core.getInput('post-pr-comment') === 'true';
-        if (postPrComment && github.context.eventName === 'pull_request') {
-            const token = core.getInput('github-token', { required: true });
-            const octokit = github.getOctokit(token);
-            const prNumber = github.context.payload.pull_request.number;
-            const commentBody = buildPrCommentBody(results, passed, skipped, failed, total);
-            await octokit.rest.issues.createComment({
-                ...github.context.repo,
-                issue_number: prNumber,
-                body: commentBody,
-            });
-        }
-        // Fail if required
-        if (!allVerified && failOnUnsigned) {
-            core.setFailed(`${failed} commit(s) failed signature verification`);
+        else {
+            // Skipping commit verification (artifact-only mode)
+            core.info('Skipping commit verification (artifact-only mode)');
+            core.setOutput('verified', '');
+            core.setOutput('results', '[]');
+            core.setOutput('total', '0');
+            core.setOutput('passed', '0');
+            core.setOutput('failed', '0');
         }
         // Artifact verification (when artifact-paths is provided)
         const artifactResults = [];
-        if (artifactPathPatterns.length > 0) {
+        if (hasArtifactPaths) {
             const version = core.getInput('auths-version') || '';
             const authsPath = await (0, verifier_1.ensureAuthsInstalled)(version);
             if (!authsPath) {
@@ -71489,7 +71541,7 @@ async function run() {
             }
             // Require identity bundle for artifact verification
             if (!resolvedBundlePath) {
-                throw new Error('Artifact verification requires an identity bundle (identity-bundle or identity-bundle-json). ' +
+                throw new Error('Artifact verification requires an identity bundle. ' +
                     'The allowed-signers mode is not supported for artifact verification.');
             }
             else {
@@ -71499,8 +71551,8 @@ async function run() {
                 // Workspace containment check
                 const workspace = path.resolve(process.env.GITHUB_WORKSPACE || process.cwd());
                 files = files.filter(f => {
-                    const resolved = path.resolve(f);
-                    if (!resolved.startsWith(workspace + path.sep) && resolved !== workspace) {
+                    const resolvedPath = path.resolve(f);
+                    if (!resolvedPath.startsWith(workspace + path.sep) && resolvedPath !== workspace) {
                         core.warning(`Skipping path outside workspace: ${f}`);
                         return false;
                     }

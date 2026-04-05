@@ -1,18 +1,10 @@
-name: 'Verify Commit Signatures with Auths'
-description: 'Verify commit signatures using Auths identity keys'
+name: 'Verify with Auths'
+description: 'Verify commit signatures and artifact attestations using Auths identity keys'
 author: 'auths'
 
 inputs:
-  allowed-signers:
-    description: 'Path to allowed_signers file'
-    required: false
-    default: '.auths/allowed_signers'
-  identity-bundle:
-    description: 'Path to identity bundle JSON file (alternative to allowed-signers)'
-    required: false
-    default: ''
-  identity-bundle-json:
-    description: 'Raw identity bundle JSON content (written to temp file automatically)'
+  identity:
+    description: 'Identity for verification. Accepts: AUTHS_CI_TOKEN JSON, identity bundle JSON, file path to bundle, or path to allowed_signers file. Default: .auths/allowed_signers'
     required: false
     default: ''
   commit-range:

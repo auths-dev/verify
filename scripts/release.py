@@ -129,7 +129,7 @@ def main() -> None:
         sys.exit(1)
 
     print(f"\nDone. Release workflow will run at:")
-    print(f"  https://github.com/auths-dev/auths-verify-github-action/actions")
+    print(f"  https://github.com/auths-dev/verify/actions")
     print(f"  (the workflow also updates the floating {major_tag} tag automatically)")
 
 

@@ -8,12 +8,10 @@ Verify commit signatures using [Auths](https://github.com/auths-dev/auths) ident
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
-- uses: auths-dev/auths-verify-github-action@v1
-  with:
-    allowed-signers: '.auths/allowed_signers'
+- uses: auths-dev/verify@v1
 ```
 
-That's it. The action auto-detects the commit range from the GitHub event (PR or push), downloads the `auths` CLI, and verifies each commit.
+That's it. The action auto-detects the commit range from the GitHub event (PR or push), downloads the `auths` CLI, and verifies each commit. Identity is auto-detected from the `identity` input (defaults to `.auths/allowed_signers`).
 
 ## Features
 
@@ -31,17 +29,18 @@ That's it. The action auto-detects the commit range from the GitHub event (PR or
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `allowed-signers` | Path to allowed_signers file | No | `.auths/allowed_signers` |
-| `identity-bundle` | Path to identity bundle JSON file (alternative to allowed-signers) | No | `''` |
-| `identity-bundle-json` | Raw identity bundle JSON content (written to temp file automatically) | No | `''` |
+| `identity` | Identity for verification. Accepts: CI token JSON, identity bundle JSON, file path to bundle, or path to allowed_signers file | No | `.auths/allowed_signers` (auto) |
 | `commit-range` | Git commit range to verify (e.g. `HEAD~5..HEAD`) | No | Auto-detected from event |
 | `auths-version` | Auths CLI version to use (e.g. `0.5.0`) | No | `''` (latest) |
 | `fail-on-unsigned` | Whether to fail the action if unsigned commits are found | No | `true` |
 | `skip-merge-commits` | Whether to skip merge commits during verification | No | `true` |
 | `post-pr-comment` | Post a PR comment with results and fix instructions (requires `pull-requests: write`) | No | `false` |
 | `github-token` | GitHub token for posting the PR comment (required when `post-pr-comment: true`) | No | `''` |
+| `artifact-paths` | Glob patterns for artifact files to verify, one per line | No | `''` |
+| `artifact-attestation-dir` | Directory containing `.auths.json` attestation files | No | `''` |
+| `fail-on-unattested` | Fail the action if any artifact lacks a valid attestation | No | `true` |
 
-> **Note:** `allowed-signers` and `identity-bundle`/`identity-bundle-json` are mutually exclusive. Use one verification mode or the other.
+The `identity` input auto-detects the format. When empty, it defaults to the `.auths/allowed_signers` file. When only `artifact-paths` is set with an identity bundle, commit verification is skipped automatically.
 
 ## Outputs
 
@@ -55,9 +54,11 @@ That's it. The action auto-detects the commit range from the GitHub event (PR or
 
 ## Verification Modes
 
-### Mode 1: Allowed Signers File (default)
+The `identity` input auto-detects the format:
 
-Commit the team's public keys to your repo:
+### Allowed Signers File (default)
+
+Commit the team's public keys to your repo. When `identity` is empty, the action looks for `.auths/allowed_signers`:
 
 ```
 # .auths/allowed_signers
@@ -66,12 +67,18 @@ bob@example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...
 ```
 
 ```yaml
-- uses: auths-dev/auths-verify-github-action@v1
-  with:
-    allowed-signers: '.auths/allowed_signers'
+- uses: auths-dev/verify@v1
 ```
 
-### Mode 2: Identity Bundle (stateless CI)
+Or pass a custom path:
+
+```yaml
+- uses: auths-dev/verify@v1
+  with:
+    identity: 'path/to/allowed_signers'
+```
+
+### Identity Bundle (stateless CI)
 
 Export your identity bundle locally and store it as a GitHub secret:
 
@@ -80,20 +87,20 @@ auths id export-bundle --alias mykey --output bundle.json
 gh secret set AUTHS_IDENTITY_BUNDLE < bundle.json
 ```
 
-Then use the secret in your workflow:
+Then pass the secret directly — the action detects the JSON format automatically:
 
 ```yaml
-- uses: auths-dev/auths-verify-github-action@v1
+- uses: auths-dev/verify@v1
   with:
-    identity-bundle-json: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
+    identity: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
 ```
 
 Or commit the bundle (it contains only public data) and reference the file:
 
 ```yaml
-- uses: auths-dev/auths-verify-github-action@v1
+- uses: auths-dev/verify@v1
   with:
-    identity-bundle: '.auths/identity-bundle.json'
+    identity: '.auths/identity-bundle.json'
 ```
 
 ## Example Workflows
@@ -115,9 +122,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: auths-dev/auths-verify-github-action@v1
-        with:
-          allowed-signers: '.auths/allowed_signers'
+      - uses: auths-dev/verify@v1
 ```
 
 ### Identity Bundle with Secret
@@ -134,17 +139,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: auths-dev/auths-verify-github-action@v1
+      - uses: auths-dev/verify@v1
         with:
-          identity-bundle-json: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
+          identity: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
 ```
 
 ### Non-blocking (Warn Only)
 
 ```yaml
-- uses: auths-dev/auths-verify-github-action@v1
+- uses: auths-dev/verify@v1
   with:
-    allowed-signers: '.auths/allowed_signers'
     fail-on-unsigned: 'false'
 ```
 
@@ -164,9 +168,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: auths-dev/auths-verify-github-action@v1
+      - uses: auths-dev/verify@v1
         with:
-          allowed-signers: '.auths/allowed_signers'
           post-pr-comment: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -176,9 +179,8 @@ jobs:
 ```yaml
 - name: Verify commits
   id: verify
-  uses: auths-dev/auths-verify-github-action@v1
+  uses: auths-dev/verify@v1
   with:
-    allowed-signers: '.auths/allowed_signers'
     fail-on-unsigned: 'false'
 
 - name: Gate a downstream step on verification
@@ -211,9 +213,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: auths-dev/auths-verify-github-action@v1
+      - uses: auths-dev/verify@v1
         with:
-          identity-bundle-json: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
+          identity: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
           fail-on-unsigned: ${{ inputs.mode == 'enforce' && 'true' || 'false' }}
 ```
 
