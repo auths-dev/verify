@@ -79,11 +79,11 @@ async function run(): Promise<void> {
     await runPreflightChecks();
 
     // Get inputs
-    const identityInput = core.getInput('identity');
-    let commitRange = core.getInput('commit-range');
+    const identityInput = core.getInput('token');
+    let commitRange = core.getInput('commits');
     const failOnUnsigned = core.getInput('fail-on-unsigned') === 'true';
     const skipMergeCommits = core.getInput('skip-merge-commits') !== 'false';
-    const artifactPathPatterns = core.getMultilineInput('artifact-paths');
+    const artifactPathPatterns = core.getMultilineInput('files');
     const artifactAttestationDir = core.getInput('artifact-attestation-dir');
     const failOnUnattested = core.getInput('fail-on-unattested') !== 'false';
 
@@ -247,7 +247,7 @@ async function run(): Promise<void> {
         files = [...new Set(files)];
 
         if (files.length === 0) {
-          core.warning('artifact-paths provided but no files matched');
+          core.warning('files provided but no artifacts matched');
         }
 
         for (const file of files) {

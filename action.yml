@@ -3,11 +3,11 @@ description: 'Verify commit signatures and artifact attestations using Auths ide
 author: 'auths'
 
 inputs:
-  identity:
+  token:
     description: 'Identity for verification. Accepts: AUTHS_CI_TOKEN JSON, identity bundle JSON, file path to bundle, or path to allowed_signers file. Default: .auths/allowed_signers'
     required: false
     default: ''
-  commit-range:
+  commits:
     description: 'Git commit range to verify (defaults to PR commits or push commits)'
     required: false
     default: ''
@@ -31,7 +31,7 @@ inputs:
     description: 'GitHub token used to post the PR comment (required when post-pr-comment is true)'
     required: false
     default: ''
-  artifact-paths:
+  files:
     description: 'Glob patterns for artifact files to verify, one per line (e.g., "dist/*.tar.gz")'
     required: false
     default: ''
