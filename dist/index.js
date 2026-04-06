@@ -71346,6 +71346,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.resolveIdentity = resolveIdentity;
+exports.buildSummaryMarkdown = buildSummaryMarkdown;
 exports.getDefaultCommitRange = getDefaultCommitRange;
 const core = __importStar(__nccwpck_require__(37484));
 const exec = __importStar(__nccwpck_require__(95236));
@@ -71616,14 +71617,18 @@ function fixMessageForType(type, commit, failedCount) {
     switch (type) {
         case 'unsigned':
             return [
-                `Commit ${commit.slice(0, 8)} is not signed.`,
+                `Commit ${commit.slice(0, 8)} is not signed. To sign future commits:`,
                 ``,
-                `Install auths:`,
-                `  macOS:  brew install auths`,
-                `  Linux:  See https://github.com/auths-dev/auths/releases/latest`,
+                `1. Install auths:`,
+                `   macOS:  brew install auths`,
+                `   Linux:  See https://github.com/auths-dev/auths/releases/latest`,
                 ``,
-                `Then re-sign and push:`,
-                `  ${amendCmd}`,
+                `2. Set up signing:`,
+                `   auths init`,
+                `   auths git setup`,
+                ``,
+                `3. Re-sign and push:`,
+                `   ${amendCmd}`,
                 ``,
                 `Quickstart: https://github.com/auths-dev/auths#quickstart`,
             ].join('\n');
@@ -71689,13 +71694,23 @@ function buildSummaryMarkdown(results, passed, skipped, failed, total) {
         lines.push('');
         switch (dominantType) {
             case 'unsigned':
-                lines.push(`Commit \`${firstFailed.commit.slice(0, 8)}\` is not signed. Install auths and re-sign:`);
+                lines.push(`Commit \`${firstFailed.commit.slice(0, 8)}\` is not signed. To sign future commits:`);
                 lines.push('');
-                lines.push('**macOS:** `brew install auths`');
-                lines.push('**Linux:** Download from [releases](https://github.com/auths-dev/auths/releases/latest)');
+                lines.push('**1. Install auths**');
                 lines.push('');
-                lines.push('Then re-sign:');
+                lines.push('macOS: `brew install auths`');
+                lines.push('Linux: Download from [releases](https://github.com/auths-dev/auths/releases/latest)');
+                lines.push('');
+                lines.push('**2. Set up signing**');
+                lines.push('');
+                lines.push('```bash');
+                lines.push('auths init');
+                lines.push('auths git setup');
                 lines.push('```');
+                lines.push('');
+                lines.push('**3. Re-sign and push**');
+                lines.push('');
+                lines.push('```bash');
                 lines.push(amendCmd);
                 lines.push('```');
                 lines.push('');
