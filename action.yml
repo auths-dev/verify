@@ -1,10 +1,5 @@
 name: 'Verify with Auths'
-description: >
-  Protect your supply chain by enforcing cryptographic commit signatures on every PR.
-  Verifies that every commit is signed by an authorized developer using Auths identity keys.
-  Zero configuration needed — reads .auths/allowed_signers automatically.
-  Classifies failures (unsigned, unknown key, corrupted signature) with copy-pasteable fix commands
-  and posts a GitHub Step Summary with a "How to fix" guide.
+description: 'Verify cryptographic commit and artifact signatures on every PR using Auths identity keys.'
 author: 'auths-dev'
 
 inputs:
