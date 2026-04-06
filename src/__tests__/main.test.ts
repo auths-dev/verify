@@ -53,6 +53,7 @@ import { verifyArtifact, ensureAuthsInstalled } from '../verifier';
 
 // Import after mocks are set up
 import { getDefaultCommitRange } from '../main';
+import { buildSummaryMarkdown } from '../main';
 
 describe('getDefaultCommitRange', () => {
   afterEach(() => {
@@ -124,5 +125,22 @@ describe('getDefaultCommitRange', () => {
 
     const range = await getDefaultCommitRange();
     expect(range).toBe('HEAD^..HEAD');
+  });
+});
+
+describe('buildSummaryMarkdown - unsigned failure', () => {
+  it('includes auths init and auths git setup in the how-to-fix section', () => {
+    const results = [{
+      commit: 'abc12345def67890',
+      valid: false,
+      skipped: false,
+      failureType: 'unsigned' as const,
+      error: 'No signature found',
+      signer: undefined,
+      skipReason: undefined,
+    }];
+    const md = buildSummaryMarkdown(results, 0, 0, 1, 1);
+    expect(md).toContain('auths init');
+    expect(md).toContain('auths git setup');
   });
 });

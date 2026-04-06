@@ -1,5 +1,7 @@
 # Auths Verify Action
 
+[![Verified with Auths](https://img.shields.io/badge/Verified%20with-Auths-4B9CD3?logo=github&logoColor=white)](https://github.com/auths-dev/verify)
+
 Verify commit signatures using [Auths](https://github.com/auths-dev/auths) token keys. Ensures every commit in a PR or push is cryptographically signed by an authorized developer.
 
 ## Quickstart
@@ -12,6 +14,28 @@ Verify commit signatures using [Auths](https://github.com/auths-dev/auths) token
 ```
 
 That's it. The action auto-detects the commit range from the GitHub event (PR or push), downloads the `auths` CLI, and verifies each commit. Identity is auto-detected from the `token` input (defaults to `.auths/allowed_signers`).
+
+## One-Liner Install
+
+Add this file to your repo to start enforcing signed commits on every PR:
+
+```yaml
+# .github/workflows/verify.yml
+name: Verify Commits
+on: [pull_request]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: auths-dev/verify@v1
+        with:
+          fail-on-unsigned: true
+```
+
+That's it. No token or configuration needed — the action reads `.auths/allowed_signers` automatically.
 
 ## Features
 

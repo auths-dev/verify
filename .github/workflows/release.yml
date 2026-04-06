@@ -31,58 +31,14 @@ jobs:
       - name: Check dist is up to date
         run: git diff --exit-code -- dist/ ':!dist/**/*.d.ts.map'
 
-      # --- Artifact signing (mirrors auths/auths release workflow) ---
-      - name: Install auths CLI
-        run: |
-          mkdir -p /tmp/auths-install
-          curl -sL https://github.com/auths-dev/auths/releases/latest/download/auths-linux-x86_64.tar.gz | tar xz -C /tmp/auths-install
-          sudo cp /tmp/auths-install/auths /usr/local/bin/auths
-          rm -rf /tmp/auths-install
-
-      - name: Sign dist/index.js
-        env:
-          AUTHS_CI_TOKEN: ${{ secrets.AUTHS_CI_TOKEN }}
-          AUTHS_KEYCHAIN_BACKEND: file
-          AUTHS_KEYCHAIN_FILE: /tmp/auths-ci-keychain
-        run: |
-          if [ -z "$AUTHS_CI_TOKEN" ]; then
-            echo "::warning::Skipping artifact signing: AUTHS_CI_TOKEN not set (run 'auths ci setup' to configure)"
-            exit 0
-          fi
-
-          # Extract fields from the single CI token
-          AUTHS_PASSPHRASE=$(echo "$AUTHS_CI_TOKEN" | jq -r '.passphrase')
-          echo "::add-mask::$AUTHS_PASSPHRASE"
-          export AUTHS_PASSPHRASE
-
-          echo "$AUTHS_CI_TOKEN" | jq -r '.keychain' | base64 -d > /tmp/auths-ci-keychain
-          mkdir -p /tmp/auths-identity
-          echo "$AUTHS_CI_TOKEN" | jq -r '.identity_repo' | base64 -d | tar -xz -C /tmp/auths-identity
-
-          if ! git -C /tmp/auths-identity rev-parse --git-dir > /dev/null 2>&1; then
-            echo "::warning::Skipping artifact signing: identity repo in AUTHS_CI_TOKEN is not a valid git repository"
-            exit 0
-          fi
-
-          auths artifact sign dist/index.js \
-            --device-key ci-release-device \
-            --note "GitHub Actions release — ${GITHUB_REF_NAME}" \
-            --repo /tmp/auths-identity
-
-          echo "Signed dist/index.js → dist/index.js.auths.json"
-
-          # Write verify bundle for next step
-          echo "$AUTHS_CI_TOKEN" | jq -r '.verify_bundle' > /tmp/auths-verify-bundle.json
-
-      # --- Verify the artifact we just signed (dogfood) ---
-      - name: Verify dist/index.js attestation
-        if: hashFiles('dist/index.js.auths.json') != ''
-        uses: ./
+      # --- Artifact signing (dogfood: sign dist/index.js using auths-dev/sign@v1) ---
+      - name: Sign and verify dist/index.js
+        uses: auths-dev/sign@v1
         with:
-          token: /tmp/auths-verify-bundle.json
+          token: ${{ secrets.AUTHS_CI_TOKEN }}
           files: 'dist/index.js'
-          fail-on-unattested: true
-          fail-on-unsigned: false
+          verify: true
+          note: 'GitHub Actions release — ${{ github.ref_name }}'
 
       - name: Generate SHA256 checksums
         run: |
