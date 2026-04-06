@@ -33,15 +33,4 @@ jobs:
             exit 1
           }
 
-  verify-commits:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Verify commit signatures
-        uses: ./
-        with:
-          fail-on-unsigned: true
 

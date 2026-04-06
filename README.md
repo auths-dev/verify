@@ -1,6 +1,8 @@
 # Auths Verify Action
 
 [![Verified with Auths](https://img.shields.io/badge/Verified%20with-Auths-4B9CD3?logo=github&logoColor=white)](https://github.com/auths-dev/verify)
+[![Verify Commits](https://github.com/auths-dev/verify/actions/workflows/verify-commits.yml/badge.svg)](https://github.com/auths-dev/verify/actions/workflows/verify-commits.yml?query=branch%3Amain+event%3Apush)
+[![Sign Commits](https://github.com/auths-dev/verify/actions/workflows/sign-commits.yml/badge.svg)](https://github.com/auths-dev/verify/actions/workflows/sign-commits.yml?query=branch%3Amain)
 
 Verify commit signatures using [Auths](https://github.com/auths-dev/auths) token keys. Ensures every commit in a PR or push is cryptographically signed by an authorized developer.
 
