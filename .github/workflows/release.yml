@@ -1,5 +1,4 @@
 # Triggered by: python scripts/release.py --push
-# (tags vX.Y.Z and pushes, which triggers this workflow)
 
 name: Release
 
@@ -31,13 +30,11 @@ jobs:
       - name: Check dist is up to date
         run: git diff --exit-code -- dist/ ':!dist/**/*.d.ts.map'
 
-      # --- Artifact signing (dogfood: sign dist/index.js using auths-dev/sign@v1) ---
-      - name: Sign and verify dist/index.js
+      # Dogfood: sign dist/index.js using auths-dev/sign@v1 (ephemeral, no secrets)
+      - name: Sign dist/index.js
         uses: auths-dev/sign@v1
         with:
-          token: ${{ secrets.AUTHS_CI_TOKEN }}
           files: 'dist/index.js'
-          verify: true
           note: 'GitHub Actions release — ${{ github.ref_name }}'
 
       - name: Generate SHA256 checksums
@@ -60,22 +57,12 @@ jobs:
           body: |
             ## Auths Verify GitHub Action
 
-            Verify commit signatures and artifact attestations in your CI pipeline using [Auths](https://github.com/auths-dev/auths) identity keys.
+            Verify commit signatures and artifact attestations in CI.
 
             ### Usage
 
             ```yaml
             - uses: auths-dev/verify@v1
-              with:
-                token: '.auths/allowed_signers'
-            ```
-
-            **New: Artifact verification**
-            ```yaml
-            - uses: auths-dev/verify@v1
-              with:
-                token: $\{{ secrets.AUTHS_CI_TOKEN }}
-                files: 'dist/*.tar.gz'
             ```
 
             See the [README](https://github.com/auths-dev/verify#readme) for full configuration options.

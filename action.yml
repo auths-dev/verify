@@ -3,8 +3,8 @@ description: 'Verify cryptographic commit and artifact signatures on every PR us
 author: 'auths-dev'
 
 inputs:
-  token:
-    description: 'Identity for verification. Accepts: AUTHS_CI_TOKEN JSON, identity bundle JSON, file path to bundle, or path to allowed_signers file. Default: .auths/allowed_signers'
+  identity:
+    description: 'Identity for verification. Accepts: identity bundle JSON, file path to bundle, or path to allowed_signers file. Default: .auths/allowed_signers'
     required: false
     default: ''
   commits:
