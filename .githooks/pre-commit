@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Local pre-commit guardrails for auths-dev/verify.
+#
+# Install once per clone:
+#   git config core.hooksPath .githooks
+set -euo pipefail
+
+fail=0
+
+# 1. Block merge conflict markers and whitespace errors in staged changes.
+#    `git diff --check` is purpose-built for this.
+if ! git diff --cached --check; then
+  echo ""
+  echo "ERROR: staged changes contain merge conflict markers or whitespace errors (see above)." >&2
+  fail=1
+fi
+
+# 2. Block src/ changes that forget to rebuild dist/.
+#    If any src/**/*.ts is staged but nothing under dist/ is staged, CI will reject the commit
+#    because `git diff --exit-code -- dist/` will fail. Catch it locally.
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+src_changed=$(printf '%s\n' "$staged" | grep -E '^src/.*\.(ts|tsx)$' || true)
+dist_changed=$(printf '%s\n' "$staged" | grep -E '^dist/' || true)
+
+if [ -n "$src_changed" ] && [ -z "$dist_changed" ]; then
+  echo "ERROR: src/ has staged changes but dist/ does not."                        >&2
+  echo "       Run 'npm run build' and stage dist/ before committing."             >&2
+  echo "       (CI enforces this via .github/workflows/ci.yml -> 'Check dist is committed'.)" >&2
+  fail=1
+fi
+
+exit "$fail"
