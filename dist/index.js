@@ -71654,10 +71654,11 @@ function buildSummaryMarkdown(results, passed, skipped, failed, total) {
     lines.push('');
     lines.push('| Commit | Status | Details |');
     lines.push('|--------|--------|---------|');
+    const skippedRows = [];
     for (const result of results) {
         const shortSha = `\`${result.commit.substring(0, 8)}\``;
         if (result.skipped) {
-            lines.push(`| ${shortSha} | Skipped | ${result.skipReason || 'N/A'} |`);
+            skippedRows.push(`| ${shortSha} | Skipped | ${result.skipReason || 'N/A'} |`);
         }
         else if (result.valid) {
             const signer = result.signer || 'verified';
@@ -71667,6 +71668,20 @@ function buildSummaryMarkdown(results, passed, skipped, failed, total) {
             const error = result.error || 'No signature found';
             lines.push(`| ${shortSha} | \u274c Failed | ${error} |`);
         }
+    }
+    // Collapse skipped commits if there are more than 3
+    if (skippedRows.length > 0 && skippedRows.length <= 3) {
+        lines.push(...skippedRows);
+    }
+    else if (skippedRows.length > 3) {
+        lines.push('');
+        lines.push(`<details><summary>${skippedRows.length} skipped commits (merge commits)</summary>`);
+        lines.push('');
+        lines.push('| Commit | Status | Details |');
+        lines.push('|--------|--------|---------|');
+        lines.push(...skippedRows);
+        lines.push('');
+        lines.push('</details>');
     }
     lines.push('');
     const resultEmoji = failed === 0 ? '\u2705' : '\u274c';
