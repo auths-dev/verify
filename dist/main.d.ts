@@ -1,7 +1,6 @@
 import { VerificationResult } from './verifier';
 export interface ResolvedIdentity {
-    mode: 'allowed-signers' | 'identity-bundle';
-    allowedSignersPath: string;
+    mode: 'identity-bundle' | 'kel-native';
     identityBundlePath: string;
     tempFile?: string;
 }

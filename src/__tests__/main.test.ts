@@ -129,7 +129,7 @@ describe('getDefaultCommitRange', () => {
 });
 
 describe('buildSummaryMarkdown - unsigned failure', () => {
-  it('includes auths init and auths git setup in the how-to-fix section', () => {
+  it('includes auths init and auths sign in the how-to-fix section', () => {
     const results = [{
       commit: 'abc12345def67890',
       valid: false,
@@ -141,6 +141,7 @@ describe('buildSummaryMarkdown - unsigned failure', () => {
     }];
     const md = buildSummaryMarkdown(results, 0, 0, 1, 1);
     expect(md).toContain('auths init');
-    expect(md).toContain('auths git setup');
+    expect(md).toContain('auths sign');
+    expect(md).toContain('auths id export-bundle');
   });
 });

@@ -25,7 +25,6 @@ export interface ArtifactVerificationResult {
  */
 export declare function classifyError(error: string): FailureType;
 export interface VerifyOptions {
-    allowedSignersPath: string;
     identityBundlePath: string;
     skipMergeCommits: boolean;
 }

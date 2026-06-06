@@ -13,10 +13,9 @@ describe('resolveIdentity', () => {
     tmpFiles.length = 0;
   });
 
-  it('returns allowed-signers default when input is empty', () => {
+  it('returns kel-native default when input is empty', () => {
     const result = resolveIdentity('');
-    expect(result.mode).toBe('allowed-signers');
-    expect(result.allowedSignersPath).toBe('.auths/allowed_signers');
+    expect(result.mode).toBe('kel-native');
     expect(result.identityBundlePath).toBe('');
     expect(result.tempFile).toBeUndefined();
   });
@@ -65,15 +64,12 @@ describe('resolveIdentity', () => {
     expect(result.tempFile).toBeUndefined();
   });
 
-  it('detects file path to allowed-signers text file', () => {
+  it('throws on a non-bundle text file (allowed_signers no longer supported)', () => {
     const sigPath = path.join(os.tmpdir(), `test-signers-${Date.now()}`);
     fs.writeFileSync(sigPath, 'alice@example.com ssh-ed25519 AAAA...\n');
     tmpFiles.push(sigPath);
 
-    const result = resolveIdentity(sigPath);
-    expect(result.mode).toBe('allowed-signers');
-    expect(result.allowedSignersPath).toBe(sigPath);
-    expect(result.identityBundlePath).toBe('');
+    expect(() => resolveIdentity(sigPath)).toThrow('is not an identity bundle');
   });
 
   it('throws on JSON without recognized fields', () => {

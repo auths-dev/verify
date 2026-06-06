@@ -8,20 +8,17 @@ import * as glob from '@actions/glob';
 import { verifyCommits, verifyArtifact, VerifyOptions, VerificationResult, ArtifactVerificationResult, FailureType, ensureAuthsInstalled, runPreflightChecks } from './verifier';
 
 export interface ResolvedIdentity {
-  mode: 'allowed-signers' | 'identity-bundle';
-  allowedSignersPath: string;
+  mode: 'identity-bundle' | 'kel-native';
   identityBundlePath: string;
   tempFile?: string;
 }
 
 export function resolveIdentity(input: string): ResolvedIdentity {
-  // Empty → default to allowed-signers file
+  // Empty → KEL-native verification: the signer is read from each commit's
+  // Auths-Id/Auths-Device trailers and resolved against the local identity
+  // store. For stateless CI, pass an identity bundle via the `token` input.
   if (!input) {
-    return {
-      mode: 'allowed-signers',
-      allowedSignersPath: '.auths/allowed_signers',
-      identityBundlePath: '',
-    };
+    return { mode: 'kel-native', identityBundlePath: '' };
   }
 
   const trimmed = input.trim();
@@ -35,14 +32,14 @@ export function resolveIdentity(input: string): ResolvedIdentity {
       if (parsed.version && parsed.verify_bundle) {
         const bundlePath = path.join(os.tmpdir(), `auths-bundle-${Date.now()}.json`);
         fs.writeFileSync(bundlePath, JSON.stringify(parsed.verify_bundle));
-        return { mode: 'identity-bundle', allowedSignersPath: '', identityBundlePath: bundlePath, tempFile: bundlePath };
+        return { mode: 'identity-bundle', identityBundlePath: bundlePath, tempFile: bundlePath };
       }
 
       // Raw identity bundle JSON (has identity_did)
       if (parsed.identity_did) {
         const bundlePath = path.join(os.tmpdir(), `auths-bundle-${Date.now()}.json`);
         fs.writeFileSync(bundlePath, trimmed);
-        return { mode: 'identity-bundle', allowedSignersPath: '', identityBundlePath: bundlePath, tempFile: bundlePath };
+        return { mode: 'identity-bundle', identityBundlePath: bundlePath, tempFile: bundlePath };
       }
 
       throw new Error('JSON input does not look like an identity bundle or CI token');
@@ -55,16 +52,17 @@ export function resolveIdentity(input: string): ResolvedIdentity {
     }
   }
 
-  // File path — check if it looks like an allowed-signers file or a bundle
+  // File path — must be an identity bundle. The legacy allowed_signers file is
+  // no longer supported: KEL-native verification reads the signer from trailers.
   if (fs.existsSync(trimmed)) {
-    try {
-      const content = fs.readFileSync(trimmed, 'utf8').trim();
-      if (content.startsWith('{')) {
-        return { mode: 'identity-bundle', allowedSignersPath: '', identityBundlePath: trimmed };
-      }
-    } catch { /* not readable as text */ }
-    // Default: treat as allowed-signers path
-    return { mode: 'allowed-signers', allowedSignersPath: trimmed, identityBundlePath: '' };
+    const content = fs.readFileSync(trimmed, 'utf8').trim();
+    if (content.startsWith('{')) {
+      return { mode: 'identity-bundle', identityBundlePath: trimmed };
+    }
+    throw new Error(
+      `Identity input "${trimmed}" is not an identity bundle. ` +
+      'For stateless CI, generate one with `auths id export-bundle`.'
+    );
   }
 
   // Doesn't exist as a file — assume it's inline JSON that failed to parse
@@ -127,7 +125,6 @@ async function run(): Promise<void> {
 
       // Build options
       const options: VerifyOptions = {
-        allowedSignersPath: resolved.allowedSignersPath,
         identityBundlePath: resolvedBundlePath,
         skipMergeCommits,
       };
@@ -299,41 +296,40 @@ async function run(): Promise<void> {
 /**
  * Return a human-readable fix message for the dominant failure type.
  */
-function fixMessageForType(type: FailureType, commit: string, failedCount: number): string {
-  const plural = failedCount > 1;
-  const amendCmd = plural
-    ? `git rebase HEAD~${failedCount} --exec 'git commit --amend --no-edit -S'\ngit push --force-with-lease`
-    : `git commit --amend --no-edit -S\ngit push --force-with-lease`;
+function fixMessageForType(type: FailureType, commit: string, _failedCount: number): string {
+  const signCmd = `auths sign origin/main..HEAD\ngit push --force-with-lease`;
 
   switch (type) {
     case 'unsigned':
       return [
-        `Commit ${commit.slice(0, 8)} is not signed. To sign future commits:`,
+        `Commit ${commit.slice(0, 8)} has no Auths signature (no Auths-Id/Auths-Device trailer).`,
         ``,
         `1. Install auths:`,
         `   macOS:  brew install auths`,
         `   Linux:  See https://github.com/auths-dev/auths/releases/latest`,
         ``,
-        `2. Set up signing:`,
+        `2. One-time setup (creates your identity and configures Git):`,
         `   auths init`,
-        `   auths git setup`,
         ``,
-        `3. Re-sign and push:`,
-        `   ${amendCmd}`,
+        `3. Sign the commits in this branch and push:`,
+        `   ${signCmd}`,
+        ``,
+        `For CI to verify the signer, commit an identity bundle:`,
+        `   auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 31536000`,
         ``,
         `Quickstart: https://github.com/auths-dev/auths#quickstart`,
       ].join('\n');
 
     case 'unknown_signer':
       return [
-        `Commit ${commit.slice(0, 8)} is signed but the key is not in the allowed signers.`,
-        `Ask a maintainer to add your public key, or check your allowed-signers file.`,
+        `Commit ${commit.slice(0, 8)} is signed, but its signer could not be verified against the trusted identity.`,
+        `Make sure the CI identity bundle is present and current, then pass it via the \`token\` input:`,
         ``,
-        `Export your public key:  auths key export --format pub`,
+        `   auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 31536000`,
       ].join('\n');
 
     case 'invalid_signature':
-      return `Commit ${commit.slice(0, 8)} has a corrupted or invalid signature. Re-sign it:\n  ${amendCmd}`;
+      return `Commit ${commit.slice(0, 8)} has an invalid signature. Re-sign it:\n  ${signCmd}`;
 
     default:
       return `Commit ${commit.slice(0, 8)} failed verification. See details above.`;
@@ -404,10 +400,7 @@ export function buildSummaryMarkdown(
     }
     const dominantType = (Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0][0]) as FailureType;
     const firstFailed = failedResults[0];
-    const plural = failed > 1;
-    const amendCmd = plural
-      ? `git rebase HEAD~${failed} --exec 'git commit --amend --no-edit -S'\ngit push --force-with-lease`
-      : `git commit --amend --no-edit -S\ngit push --force-with-lease`;
+    const signCmd = `auths sign origin/main..HEAD\ngit push --force-with-lease`;
 
     lines.push('---');
     lines.push('### How to fix');
@@ -415,41 +408,43 @@ export function buildSummaryMarkdown(
 
     switch (dominantType) {
       case 'unsigned':
-        lines.push(`Commit \`${firstFailed.commit.slice(0, 8)}\` is not signed. To sign future commits:`);
+        lines.push(`Commit \`${firstFailed.commit.slice(0, 8)}\` has no Auths signature (no \`Auths-Id\`/\`Auths-Device\` trailer).`);
         lines.push('');
         lines.push('**1. Install auths**');
         lines.push('');
         lines.push('macOS: `brew install auths`');
         lines.push('Linux: Download from [releases](https://github.com/auths-dev/auths/releases/latest)');
         lines.push('');
-        lines.push('**2. Set up signing**');
+        lines.push('**2. One-time setup** (creates your identity and configures Git)');
         lines.push('');
         lines.push('```bash');
         lines.push('auths init');
-        lines.push('auths git setup');
         lines.push('```');
         lines.push('');
-        lines.push('**3. Re-sign and push**');
+        lines.push('**3. Sign this branch and push**');
         lines.push('');
         lines.push('```bash');
-        lines.push(amendCmd);
+        lines.push(signCmd);
+        lines.push('```');
+        lines.push('');
+        lines.push('For CI to verify the signer, commit an identity bundle:');
+        lines.push('```bash');
+        lines.push('auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 31536000');
         lines.push('```');
         lines.push('');
         lines.push('[Quickstart →](https://github.com/auths-dev/auths#quickstart)');
         break;
       case 'unknown_signer':
-        lines.push(`Commit \`${firstFailed.commit.slice(0, 8)}\` is signed but the key is not in the allowed signers.`);
-        lines.push('Ask a maintainer to add your public key, or check your allowed-signers file.');
-        lines.push('');
-        lines.push('Export your public key:');
-        lines.push('```');
-        lines.push('auths key export --format pub');
+        lines.push(`Commit \`${firstFailed.commit.slice(0, 8)}\` is signed, but its signer could not be verified against the trusted identity.`);
+        lines.push('Make sure the CI identity bundle is present and current, then pass it via the `token` input:');
+        lines.push('```bash');
+        lines.push('auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 31536000');
         lines.push('```');
         break;
       case 'invalid_signature':
-        lines.push(`Commit \`${firstFailed.commit.slice(0, 8)}\` has a corrupted or invalid signature. Re-sign it:`);
+        lines.push(`Commit \`${firstFailed.commit.slice(0, 8)}\` has an invalid signature. Re-sign it:`);
         lines.push('```');
-        lines.push(amendCmd);
+        lines.push(signCmd);
         lines.push('```');
         break;
       default:

@@ -41,9 +41,11 @@ export interface ArtifactVerificationResult {
  */
 export function classifyError(error: string): FailureType {
   const e = error.toLowerCase();
-  if (e.includes('no signature') || e.includes('not signed') || e.includes('unsigned'))
+  if (e.includes('no signature') || e.includes('not signed') || e.includes('unsigned') ||
+      e.includes('auths-id') || e.includes('trailer'))
     return 'unsigned';
-  if (e.includes('not in allowed') || e.includes('unknown signer') || e.includes('no matching'))
+  if (e.includes('not in allowed') || e.includes('unknown signer') || e.includes('no matching') ||
+      e.includes('could not be resolved') || e.includes('kel'))
     return 'unknown_signer';
   if (e.includes('invalid') || e.includes('corrupt') || e.includes('bad signature'))
     return 'invalid_signature';
@@ -51,7 +53,6 @@ export function classifyError(error: string): FailureType {
 }
 
 export interface VerifyOptions {
-  allowedSignersPath: string;
   identityBundlePath: string;
   skipMergeCommits: boolean;
 }
@@ -86,18 +87,8 @@ export async function runPreflightChecks(): Promise<void> {
     // git command failed, not necessarily a problem
   }
 
-  // Check for ssh-keygen (required by auths verify)
-  try {
-    const sshKeygenPath = await io.which('ssh-keygen', false);
-    if (!sshKeygenPath) {
-      core.warning(
-        'ssh-keygen not found in PATH. The auths verify command requires OpenSSH 8.0+.\n' +
-        'GitHub-hosted runners include it by default. Self-hosted runners may need to install openssh-client.'
-      );
-    }
-  } catch {
-    // Ignore errors in the check itself
-  }
+  // KEL-native verification checks SSH signatures in-process — no `ssh-keygen`
+  // subprocess and no `allowed_signers` file are required.
 }
 
 /**
@@ -107,34 +98,12 @@ export async function verifyCommits(
   commitRange: string,
   options: VerifyOptions
 ): Promise<VerificationResult[]> {
-  const { allowedSignersPath, identityBundlePath, skipMergeCommits } = options;
+  const { identityBundlePath, skipMergeCommits } = options;
 
-  // Determine verification mode
+  // Determine verification mode. With a bundle, verification is stateless
+  // (KEL + authorization chain travel in the bundle). Without one, the signer
+  // is resolved from the local identity store.
   const useIdentityBundle = identityBundlePath.length > 0;
-
-  // Validate inputs
-  if (!useIdentityBundle && !fs.existsSync(allowedSignersPath)) {
-    core.warning(`Allowed signers file not found: ${allowedSignersPath}`);
-    core.warning(
-      'To set up commit verification:\n' +
-      '  1. auths init                                          # create identity\n' +
-      '  2. auths git allowed-signers -o .auths/allowed_signers # generate file\n' +
-      '  3. git add .auths/allowed_signers && git commit        # commit it\n' +
-      '\n' +
-      'Or use an identity bundle for stateless CI (no file needed):\n' +
-      '  auths id export-bundle --alias <ALIAS> --output bundle.json\n' +
-      '\n' +
-      'Docs: https://docs.auths.dev/cli/commands/advanced/#auths-git-allowed-signers'
-    );
-
-    const commits = await getCommitsInRange(commitRange, skipMergeCommits);
-    return commits.map(commit => ({
-      commit,
-      valid: false,
-      error: `Allowed signers file not found: ${allowedSignersPath}`,
-      failureType: 'error' as FailureType
-    }));
-  }
 
   if (useIdentityBundle && !fs.existsSync(identityBundlePath)) {
     throw new Error(`Identity bundle file not found: ${identityBundlePath}`);
@@ -167,8 +136,6 @@ export async function verifyCommits(
   const cliArgs = ['verify'];
   if (useIdentityBundle) {
     cliArgs.push('--identity-bundle', identityBundlePath);
-  } else {
-    cliArgs.push('--allowed-signers', allowedSignersPath);
   }
   cliArgs.push('--json', commitRange);
 
@@ -249,7 +216,7 @@ async function verifyCommitsOneByOne(
   commits: string[],
   options: VerifyOptions
 ): Promise<VerificationResult[]> {
-  const { allowedSignersPath, identityBundlePath } = options;
+  const { identityBundlePath } = options;
   const useIdentityBundle = identityBundlePath.length > 0;
   const results: VerificationResult[] = [];
 
@@ -260,8 +227,6 @@ async function verifyCommitsOneByOne(
     const cliArgs = ['verify'];
     if (useIdentityBundle) {
       cliArgs.push('--identity-bundle', identityBundlePath);
-    } else {
-      cliArgs.push('--allowed-signers', allowedSignersPath);
     }
     cliArgs.push('--json', commit);
 

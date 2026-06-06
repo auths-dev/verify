@@ -3,8 +3,8 @@ description: 'Verify cryptographic commit and artifact signatures on every PR us
 author: 'auths-dev'
 
 inputs:
-  identity:
-    description: 'Identity for verification. Accepts: identity bundle JSON, file path to bundle, or path to allowed_signers file. Default: .auths/allowed_signers'
+  token:
+    description: 'Identity bundle for stateless verification. Accepts: identity bundle JSON, CI token JSON, or a file path to a bundle (e.g. .auths/ci-bundle.json). Leave empty for KEL-native verification against the local identity store. Generate one with `auths id export-bundle`.'
     required: false
     default: ''
   commits:
