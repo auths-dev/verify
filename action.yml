@@ -3,7 +3,7 @@ description: 'Verify cryptographic commit and artifact signatures on every PR us
 author: 'auths-dev'
 
 inputs:
-  token:
+  identity-bundle:
     description: 'Identity bundle for stateless verification. Accepts: identity bundle JSON, CI token JSON, or a file path to a bundle (e.g. .auths/ci-bundle.json). Leave empty for KEL-native verification against the local identity store. Generate one with `auths id export-bundle`.'
     required: false
     default: ''

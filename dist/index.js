@@ -71359,7 +71359,7 @@ const verifier_1 = __nccwpck_require__(32217);
 function resolveIdentity(input) {
     // Empty → KEL-native verification: the signer is read from each commit's
     // Auths-Id/Auths-Device trailers and resolved against the local identity
-    // store. For stateless CI, pass an identity bundle via the `token` input.
+    // store. For stateless CI, pass an identity bundle via the `identity-bundle` input.
     if (!input) {
         return { mode: 'kel-native', identityBundlePath: '' };
     }
@@ -71410,7 +71410,7 @@ async function run() {
         // Run pre-flight checks (shallow clone, ssh-keygen)
         await (0, verifier_1.runPreflightChecks)();
         // Get inputs
-        const identityInput = core.getInput('token');
+        const identityInput = core.getInput('identity-bundle');
         let commitRange = core.getInput('commits');
         const failOnUnsigned = core.getInput('fail-on-unsigned') === 'true';
         const skipMergeCommits = core.getInput('skip-merge-commits') !== 'false';
@@ -71631,7 +71631,7 @@ function fixMessageForType(type, commit, _failedCount) {
         case 'unknown_signer':
             return [
                 `Commit ${commit.slice(0, 8)} is signed, but its signer could not be verified against the trusted identity.`,
-                `Make sure the CI identity bundle is present and current, then pass it via the \`token\` input:`,
+                `Make sure the CI identity bundle is present and current, then pass it via the \`identity-bundle\` input:`,
                 ``,
                 `   auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 31536000`,
             ].join('\n');
@@ -71730,7 +71730,7 @@ function buildSummaryMarkdown(results, passed, skipped, failed, total) {
                 break;
             case 'unknown_signer':
                 lines.push(`Commit \`${firstFailed.commit.slice(0, 8)}\` is signed, but its signer could not be verified against the trusted identity.`);
-                lines.push('Make sure the CI identity bundle is present and current, then pass it via the `token` input:');
+                lines.push('Make sure the CI identity bundle is present and current, then pass it via the `identity-bundle` input:');
                 lines.push('```bash');
                 lines.push('auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 31536000');
                 lines.push('```');

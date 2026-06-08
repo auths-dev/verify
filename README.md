@@ -20,7 +20,7 @@ steps:
       auths-version: "0.0.1-rc.12"   # pin the CLI — the action never resolves `latest`
 ```
 
-That's it. The action auto-detects the commit range from the GitHub event (PR or push), downloads the **pinned** `auths` CLI (SHA256-checksum verified — it **fails closed** if the release has no checksum), and verifies each commit with `auths verify`. Verification is **KEL-native**: the signer is read from each commit's `Auths-Id`/`Auths-Device` trailers and checked against its key history (KEL). For stateless CI, pass an identity bundle via the `token` input.
+That's it. The action auto-detects the commit range from the GitHub event (PR or push), downloads the **pinned** `auths` CLI (SHA256-checksum verified — it **fails closed** if the release has no checksum), and verifies each commit with `auths verify`. Verification is **KEL-native**: the signer is read from each commit's `Auths-Id`/`Auths-Device` trailers and checked against its key history (KEL). For stateless CI, pass an identity bundle via the `identity-bundle` input.
 
 ## One-Liner Install
 
@@ -47,7 +47,7 @@ jobs:
 
 > **Pin the CLI.** `auths-version` must be set to a released version that publishes a `.sha256` (e.g. `0.0.1-rc.12`). The action refuses to resolve `latest` and fails closed if the binary cannot be checksum-verified — supply-chain hardening for a tool whose entire job is trust. (If `auths` is already on `PATH`, the version is not needed.)
 
-That's it for verifying against the local identity store. For stateless CI (no `~/.auths` on the runner), commit an identity bundle and point the `token` input at it — see [Identity Bundle](#identity-bundle-stateless-ci) below.
+That's it for verifying against the local identity store. For stateless CI (no `~/.auths` on the runner), commit an identity bundle and point the `identity-bundle` input at it — see [Identity Bundle](#identity-bundle-stateless-ci) below.
 
 ## Features
 
@@ -66,7 +66,7 @@ That's it for verifying against the local identity store. For stateless CI (no `
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `token` | Identity bundle for stateless verification. Accepts: CI token JSON, identity bundle JSON, or a file path to a bundle. Empty → KEL-native verification against the local identity store | No | `''` (KEL-native) |
+| `identity-bundle` | Identity bundle for stateless verification. Accepts: CI token JSON, identity bundle JSON, or a file path to a bundle. Empty → KEL-native verification against the local identity store | No | `''` (KEL-native) |
 | `commits` | Git commit range to verify (e.g. `HEAD~5..HEAD`) | No | Auto-detected from event |
 | `auths-version` | Auths CLI version to **pin** (e.g. `0.0.1-rc.12`). Required unless `auths` is on `PATH`; the action never resolves `latest` and fails closed without a verifiable `.sha256` | Yes (unless on PATH) | `''` |
 | `fail-on-unsigned` | Whether to fail the action if unsigned commits are found | No | `true` |
@@ -77,7 +77,7 @@ That's it for verifying against the local identity store. For stateless CI (no `
 | `artifact-attestation-dir` | Directory containing `.auths.json` attestation files | No | `''` |
 | `fail-on-unattested` | Fail the action if any artifact lacks a valid attestation | No | `true` |
 
-The `token` input auto-detects the format (bundle JSON, CI token JSON, or a file path to a bundle). When empty, verification is KEL-native against the local identity store. When only `files` is set with an identity bundle, commit verification is skipped automatically.
+The `identity-bundle` input auto-detects the format (bundle JSON, CI token JSON, or a file path to a bundle). When empty, verification is KEL-native against the local identity store. When only `files` is set with an identity bundle, commit verification is skipped automatically.
 
 ## Outputs
 
@@ -93,7 +93,7 @@ The `token` input auto-detects the format (bundle JSON, CI token JSON, or a file
 
 ### KEL-native (default)
 
-With an empty `token`, the action runs `auths verify` against the local identity store. Each commit's `Auths-Id`/`Auths-Device` trailers identify the signer, and the signature is checked against the signer's key history (KEL). This works on a developer machine or any runner that has `~/.auths`:
+With an empty `identity-bundle`, the action runs `auths verify` against the local identity store. Each commit's `Auths-Id`/`Auths-Device` trailers identify the signer, and the signature is checked against the signer's key history (KEL). This works on a developer machine or any runner that has `~/.auths`:
 
 ```yaml
 - uses: auths-dev/verify@v1
@@ -112,7 +112,7 @@ Commit the bundle (it contains only public data) and reference the file:
 ```yaml
 - uses: auths-dev/verify@v1
   with:
-    token: '.auths/ci-bundle.json'
+    identity-bundle: '.auths/ci-bundle.json'
 ```
 
 Or store it as a GitHub secret and pass it inline — the action detects the JSON format automatically:
@@ -124,7 +124,7 @@ gh secret set AUTHS_IDENTITY_BUNDLE < .auths/ci-bundle.json
 ```yaml
 - uses: auths-dev/verify@v1
   with:
-    token: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
+    identity-bundle: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
 ```
 
 Bundles carry a freshness TTL (`--max-age-secs`); the action fails if a bundle is older than its TTL, so refresh it when it lapses or when keys rotate.
@@ -167,7 +167,7 @@ jobs:
 
       - uses: auths-dev/verify@v1
         with:
-          token: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
+          identity-bundle: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
 ```
 
 ### Non-blocking (Warn Only)
@@ -241,7 +241,7 @@ jobs:
 
       - uses: auths-dev/verify@v1
         with:
-          token: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
+          identity-bundle: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
           fail-on-unsigned: ${{ inputs.mode == 'enforce' && 'true' || 'false' }}
 ```
 
