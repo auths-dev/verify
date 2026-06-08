@@ -110,9 +110,11 @@ async function run(): Promise<void> {
       }
     }
 
-    // Auto-detect verification mode
+    // Auto-detect verification mode. Artifact paths + an identity bundle → artifact-only
+    // verification; otherwise verify commits. (The legacy `.auths/allowed_signers` probe
+    // is gone — trust is KEL-native via `.auths/roots`.)
     const hasArtifactPaths = artifactPathPatterns.length > 0;
-    const verifyCommitsMode = !(hasArtifactPaths && resolved.mode === 'identity-bundle' && !fs.existsSync('.auths/allowed_signers'));
+    const verifyCommitsMode = !(hasArtifactPaths && resolved.mode === 'identity-bundle');
 
     // Commit verification
     let allVerified = true;

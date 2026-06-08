@@ -9,13 +9,18 @@ Verify commit signatures using [Auths](https://github.com/auths-dev/auths) ident
 ## Quickstart
 
 ```yaml
-- uses: actions/checkout@v4
-  with:
-    fetch-depth: 0
-- uses: auths-dev/verify@v1
+permissions:
+  contents: read            # verification needs nothing more
+steps:
+  - uses: actions/checkout@v4
+    with:
+      fetch-depth: 0
+  - uses: auths-dev/verify@v1
+    with:
+      auths-version: "0.0.1-rc.12"   # pin the CLI — the action never resolves `latest`
 ```
 
-That's it. The action auto-detects the commit range from the GitHub event (PR or push), downloads the `auths` CLI, and verifies each commit with `auths verify`. Verification is **KEL-native**: the signer is read from each commit's `Auths-Id`/`Auths-Device` trailers and checked against its key history (KEL). For stateless CI, pass an identity bundle via the `token` input.
+That's it. The action auto-detects the commit range from the GitHub event (PR or push), downloads the **pinned** `auths` CLI (SHA256-checksum verified — it **fails closed** if the release has no checksum), and verifies each commit with `auths verify`. Verification is **KEL-native**: the signer is read from each commit's `Auths-Id`/`Auths-Device` trailers and checked against its key history (KEL). For stateless CI, pass an identity bundle via the `token` input.
 
 ## One-Liner Install
 
@@ -25,6 +30,8 @@ Add this file to your repo to start enforcing signed commits on every PR:
 # .github/workflows/verify.yml
 name: Verify Commits
 on: [pull_request]
+permissions:
+  contents: read              # least privilege — no id-token, no write
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -34,8 +41,11 @@ jobs:
           fetch-depth: 0
       - uses: auths-dev/verify@v1
         with:
+          auths-version: "0.0.1-rc.12"   # pin the CLI version (required)
           fail-on-unsigned: true
 ```
+
+> **Pin the CLI.** `auths-version` must be set to a released version that publishes a `.sha256` (e.g. `0.0.1-rc.12`). The action refuses to resolve `latest` and fails closed if the binary cannot be checksum-verified — supply-chain hardening for a tool whose entire job is trust. (If `auths` is already on `PATH`, the version is not needed.)
 
 That's it for verifying against the local identity store. For stateless CI (no `~/.auths` on the runner), commit an identity bundle and point the `token` input at it — see [Identity Bundle](#identity-bundle-stateless-ci) below.
 
@@ -58,7 +68,7 @@ That's it for verifying against the local identity store. For stateless CI (no `
 |-------|-------------|----------|---------|
 | `token` | Identity bundle for stateless verification. Accepts: CI token JSON, identity bundle JSON, or a file path to a bundle. Empty → KEL-native verification against the local identity store | No | `''` (KEL-native) |
 | `commits` | Git commit range to verify (e.g. `HEAD~5..HEAD`) | No | Auto-detected from event |
-| `auths-version` | Auths CLI version to use (e.g. `0.5.0`) | No | `''` (latest) |
+| `auths-version` | Auths CLI version to **pin** (e.g. `0.0.1-rc.12`). Required unless `auths` is on `PATH`; the action never resolves `latest` and fails closed without a verifiable `.sha256` | Yes (unless on PATH) | `''` |
 | `fail-on-unsigned` | Whether to fail the action if unsigned commits are found | No | `true` |
 | `skip-merge-commits` | Whether to skip merge commits during verification | No | `true` |
 | `post-pr-comment` | Post a PR comment with results and fix instructions (requires `pull-requests: write`) | No | `false` |
