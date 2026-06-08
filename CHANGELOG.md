@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-09
+
 ### Changed
 
 - **BREAKING:** Renamed the `token` action input to `identity-bundle`. It carries
@@ -42,4 +44,5 @@ highlights include KEL-native commit verification, artifact attestation
 verification, identity-bundle support for stateless CI, optional PR-comment
 results with fix instructions, and zero-config Marketplace metadata.
 
-[Unreleased]: https://github.com/auths-dev/verify/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/auths-dev/verify/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/auths-dev/verify/compare/v1.3.0...v1.4.0
