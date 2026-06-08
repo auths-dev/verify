@@ -97,6 +97,8 @@ With an empty `identity-bundle`, the action runs `auths verify` against the loca
 
 ```yaml
 - uses: auths-dev/verify@v1
+  with:
+    auths-version: "0.0.1-rc.12"   # pin the CLI (required on clean runners)
 ```
 
 ### Identity Bundle (stateless CI)
@@ -112,6 +114,7 @@ Commit the bundle (it contains only public data) and reference the file:
 ```yaml
 - uses: auths-dev/verify@v1
   with:
+    auths-version: "0.0.1-rc.12"
     identity-bundle: '.auths/ci-bundle.json'
 ```
 
@@ -124,6 +127,7 @@ gh secret set AUTHS_IDENTITY_BUNDLE < .auths/ci-bundle.json
 ```yaml
 - uses: auths-dev/verify@v1
   with:
+    auths-version: "0.0.1-rc.12"
     identity-bundle: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
 ```
 
@@ -149,6 +153,8 @@ jobs:
           fetch-depth: 0
 
       - uses: auths-dev/verify@v1
+        with:
+          auths-version: "0.0.1-rc.12"
 ```
 
 ### Identity Bundle with Secret
@@ -167,6 +173,7 @@ jobs:
 
       - uses: auths-dev/verify@v1
         with:
+          auths-version: "0.0.1-rc.12"
           identity-bundle: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
 ```
 
@@ -175,6 +182,7 @@ jobs:
 ```yaml
 - uses: auths-dev/verify@v1
   with:
+    auths-version: "0.0.1-rc.12"
     fail-on-unsigned: 'false'
 ```
 
@@ -196,6 +204,7 @@ jobs:
 
       - uses: auths-dev/verify@v1
         with:
+          auths-version: "0.0.1-rc.12"
           post-pr-comment: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -207,6 +216,7 @@ jobs:
   id: verify
   uses: auths-dev/verify@v1
   with:
+    auths-version: "0.0.1-rc.12"
     fail-on-unsigned: 'false'
 
 - name: Gate a downstream step on verification
@@ -241,6 +251,7 @@ jobs:
 
       - uses: auths-dev/verify@v1
         with:
+          auths-version: "0.0.1-rc.12"
           identity-bundle: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
           fail-on-unsigned: ${{ inputs.mode == 'enforce' && 'true' || 'false' }}
 ```
