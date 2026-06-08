@@ -28,6 +28,8 @@ cp "$SOURCE/tsconfig.json"  "$TARGET/tsconfig.json"
 cp "$SOURCE/jest.config.js" "$TARGET/jest.config.js"
 cp "$SOURCE/README.md"      "$TARGET/README.md"
 cp "$SOURCE/endpoint.json"  "$TARGET/endpoint.json"
+cp "$SOURCE/LICENSE"        "$TARGET/LICENSE"
+cp "$SOURCE/CHANGELOG.md"   "$TARGET/CHANGELOG.md"
 
 # Copy source tree
 rm -rf "$TARGET/src"
