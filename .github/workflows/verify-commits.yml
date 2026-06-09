@@ -18,6 +18,8 @@ jobs:
 
       - uses: ./
         with:
+          auths-version: '0.0.1-rc.12'
+          identity-bundle: .auths/ci-bundle.json
           fail-on-unsigned: true
           post-pr-comment: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}

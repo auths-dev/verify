@@ -1,6 +1,5 @@
 # Auths Verify Action
 
-[![Verified with Auths](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fauths-dev%2Fverify%2Fmain%2Fendpoint.json)](https://github.com/auths-dev/verify)
 [![Verify Commits](https://github.com/auths-dev/verify/actions/workflows/verify-commits.yml/badge.svg)](https://github.com/auths-dev/verify/actions/workflows/verify-commits.yml?query=branch%3Amain+event%3Apush)
 [![Sign Commits](https://github.com/auths-dev/verify/actions/workflows/sign-commits.yml/badge.svg)](https://github.com/auths-dev/verify/actions/workflows/sign-commits.yml?query=branch%3Amain)
 
@@ -88,6 +87,8 @@ The `identity-bundle` input auto-detects the format (bundle JSON, CI token JSON,
 | `total` | Total number of commits checked |
 | `passed` | Number of commits that passed verification |
 | `failed` | Number of commits that failed verification |
+| `artifacts-verified` | Whether all artifacts were verified (`true`/`false`) |
+| `artifact-results` | JSON array of per-artifact verification results |
 
 ## Verification Modes
 
