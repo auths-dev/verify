@@ -36,7 +36,7 @@ jobs:
         with:
           files: 'dist/index.js'
           note: 'GitHub Actions release — ${{ github.ref_name }}'
-          auths-version: '0.0.1-rc.12'
+          auths-version: '0.1.1'
 
       - name: Generate SHA256 checksums
         run: |
