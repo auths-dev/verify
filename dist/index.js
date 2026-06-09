@@ -71359,7 +71359,7 @@ const verifier_1 = __nccwpck_require__(32217);
 function resolveIdentity(input) {
     // Empty → KEL-native verification: the signer is read from each commit's
     // Auths-Id/Auths-Device trailers and resolved against the local identity
-    // store. For stateless CI, pass an identity bundle via the `token` input.
+    // store. For stateless CI, pass an identity bundle via the `identity-bundle` input.
     if (!input) {
         return { mode: 'kel-native', identityBundlePath: '' };
     }
@@ -71410,7 +71410,7 @@ async function run() {
         // Run pre-flight checks (shallow clone, ssh-keygen)
         await (0, verifier_1.runPreflightChecks)();
         // Get inputs
-        const identityInput = core.getInput('token');
+        const identityInput = core.getInput('identity-bundle');
         let commitRange = core.getInput('commits');
         const failOnUnsigned = core.getInput('fail-on-unsigned') === 'true';
         const skipMergeCommits = core.getInput('skip-merge-commits') !== 'false';
@@ -71437,9 +71437,11 @@ async function run() {
                 return;
             }
         }
-        // Auto-detect verification mode
+        // Auto-detect verification mode. Artifact paths + an identity bundle → artifact-only
+        // verification; otherwise verify commits. (The legacy `.auths/allowed_signers` probe
+        // is gone — trust is KEL-native via `.auths/roots`.)
         const hasArtifactPaths = artifactPathPatterns.length > 0;
-        const verifyCommitsMode = !(hasArtifactPaths && resolved.mode === 'identity-bundle' && !fs.existsSync('.auths/allowed_signers'));
+        const verifyCommitsMode = !(hasArtifactPaths && resolved.mode === 'identity-bundle');
         // Commit verification
         let allVerified = true;
         if (verifyCommitsMode) {
@@ -71629,7 +71631,7 @@ function fixMessageForType(type, commit, _failedCount) {
         case 'unknown_signer':
             return [
                 `Commit ${commit.slice(0, 8)} is signed, but its signer could not be verified against the trusted identity.`,
-                `Make sure the CI identity bundle is present and current, then pass it via the \`token\` input:`,
+                `Make sure the CI identity bundle is present and current, then pass it via the \`identity-bundle\` input:`,
                 ``,
                 `   auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 31536000`,
             ].join('\n');
@@ -71728,7 +71730,7 @@ function buildSummaryMarkdown(results, passed, skipped, failed, total) {
                 break;
             case 'unknown_signer':
                 lines.push(`Commit \`${firstFailed.commit.slice(0, 8)}\` is signed, but its signer could not be verified against the trusted identity.`);
-                lines.push('Make sure the CI identity bundle is present and current, then pass it via the `token` input:');
+                lines.push('Make sure the CI identity bundle is present and current, then pass it via the `identity-bundle` input:');
                 lines.push('```bash');
                 lines.push('auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 31536000');
                 lines.push('```');
@@ -72213,8 +72215,15 @@ async function ensureAuthsInstalled(version) {
     catch {
         // Not found in PATH
     }
+    // Supply-chain hardening: require an explicitly pinned version. We never resolve
+    // `releases/latest`, which would let an upstream release silently change the binary
+    // a verification action runs. (A pre-installed `auths` on PATH is exempt — handled above.)
+    if (!version) {
+        throw new Error("The 'auths-version' input must be pinned to a released version (e.g. '0.0.1-rc.12'); " +
+            "resolving 'latest' is not allowed for a verification action.");
+    }
     // Determine the version for cache lookup
-    const cacheVersion = version || 'latest';
+    const cacheVersion = version;
     // Check tool cache
     const cachedPath = tc.find('auths', cacheVersion);
     if (cachedPath) {
@@ -72295,6 +72304,11 @@ async function ensureAuthsInstalled(version) {
         core.warning(`Binary not found at expected path: ${binaryPath}`);
     }
     catch (error) {
+        // An integrity failure (checksum mismatch/absent) is fatal — never let it fall
+        // through to a generic "binary not found" null that masks the real reason.
+        if (error instanceof Error && /checksum|unverified binary/i.test(error.message)) {
+            throw error;
+        }
         core.warning(`Failed to download auths: ${error}`);
     }
     return null;
@@ -72325,9 +72339,14 @@ async function verifyChecksum(downloadUrl, filePath) {
         if (error instanceof Error && error.message.includes('checksum mismatch')) {
             throw error;
         }
-        // Checksum file not found (older release) — warn but continue
-        core.warning('SHA256 checksum file not available for this release. ' +
-            'Skipping verification. Consider upgrading to a release with checksums.');
+        // Fail closed: a release whose `.sha256` cannot be fetched (absent on an older
+        // release, or a 404/network error) cannot be integrity-checked. Refusing to run
+        // an unverified binary is the whole point of a verification action — never warn
+        // and continue. Pin `auths-version` to a release that publishes checksums.
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`Could not verify the SHA256 checksum of the downloaded auths binary ` +
+            `(no usable .sha256 at ${checksumUrl}: ${detail}). ` +
+            `Refusing to run an unverified binary. Pin 'auths-version' to a release that publishes checksums.`);
     }
 }
 /**
@@ -72360,10 +72379,12 @@ function getAuthsDownloadUrl(version) {
     }
     const ext = platform === 'win32' ? '.zip' : '.tar.gz';
     const assetName = `auths-${platformName}-${archName}${ext}`;
-    if (version) {
-        return `https://github.com/${CLI_RELEASE_REPO}/releases/download/v${version}/${assetName}`;
+    // Version is required (callers guard before reaching here); we never build a
+    // `releases/latest` URL — pinning is mandatory for a verification action.
+    if (!version) {
+        return null;
     }
-    return `https://github.com/${CLI_RELEASE_REPO}/releases/latest/download/${assetName}`;
+    return `https://github.com/${CLI_RELEASE_REPO}/releases/download/v${version}/${assetName}`;
 }
 
 

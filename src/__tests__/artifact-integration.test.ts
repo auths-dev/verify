@@ -111,7 +111,7 @@ jest.mock('../verifier', () => {
 
 function resetMockState() {
   mockInputs = {
-    'token': '',
+    'identity-bundle': '',
     'commits': 'HEAD^..HEAD',
     'fail-on-unsigned': 'true',
     'skip-merge-commits': 'true',
@@ -166,7 +166,7 @@ describe('Artifact verification integration', () => {
 
   it('verifies artifacts when files provided', async () => {
     mockMultilineInputs['files'] = ['dist/*.tar.gz'];
-    mockInputs['token'] = '/tmp/bundle.json';
+    mockInputs['identity-bundle'] = '/tmp/bundle.json';
     mockGlobFiles = ['/workspace/dist/app.tar.gz'];
 
     mockVerifyArtifact.mockResolvedValue({
@@ -193,7 +193,7 @@ describe('Artifact verification integration', () => {
 
   it('emits warning when files matches no artifacts', async () => {
     mockMultilineInputs['files'] = ['nonexistent/*.tar.gz'];
-    mockInputs['token'] = '/tmp/bundle.json';
+    mockInputs['identity-bundle'] = '/tmp/bundle.json';
     mockGlobFiles = [];
 
     await runMain();
@@ -204,7 +204,7 @@ describe('Artifact verification integration', () => {
 
   it('fails when fail-on-unattested is true and artifact fails', async () => {
     mockMultilineInputs['files'] = ['dist/*.tar.gz'];
-    mockInputs['token'] = '/tmp/bundle.json';
+    mockInputs['identity-bundle'] = '/tmp/bundle.json';
     mockGlobFiles = ['/workspace/dist/bad.tar.gz'];
 
     mockVerifyArtifact.mockResolvedValue({
@@ -225,7 +225,7 @@ describe('Artifact verification integration', () => {
 
   it('does not fail when fail-on-unattested is false', async () => {
     mockMultilineInputs['files'] = ['dist/*.tar.gz'];
-    mockInputs['token'] = '/tmp/bundle.json';
+    mockInputs['identity-bundle'] = '/tmp/bundle.json';
     mockInputs['fail-on-unattested'] = 'false';
     mockGlobFiles = ['/workspace/dist/bad.tar.gz'];
 
@@ -247,10 +247,10 @@ describe('Artifact verification integration', () => {
     expect(artifactFailures).toHaveLength(0);
   });
 
-  it('fails when no token provided for artifact verification', async () => {
+  it('fails when no identity bundle provided for artifact verification', async () => {
     mockMultilineInputs['files'] = ['dist/*.tar.gz'];
     // No identity bundle set — defaults to allowed-signers
-    mockInputs['token'] = '';
+    mockInputs['identity-bundle'] = '';
     mockGlobFiles = ['/workspace/dist/app.tar.gz'];
 
     await runMain();
@@ -263,7 +263,7 @@ describe('Artifact verification integration', () => {
 
   it('handles partial success correctly', async () => {
     mockMultilineInputs['files'] = ['dist/*'];
-    mockInputs['token'] = '/tmp/bundle.json';
+    mockInputs['identity-bundle'] = '/tmp/bundle.json';
     mockGlobFiles = ['/workspace/dist/good.tar.gz', '/workspace/dist/bad.tar.gz'];
 
     mockVerifyArtifact
@@ -294,7 +294,7 @@ describe('Artifact verification integration', () => {
 
   it('filters paths outside workspace', async () => {
     mockMultilineInputs['files'] = ['**/*.tar.gz'];
-    mockInputs['token'] = '/tmp/bundle.json';
+    mockInputs['identity-bundle'] = '/tmp/bundle.json';
     mockGlobFiles = ['/workspace/dist/good.tar.gz', '/etc/passwd.tar.gz'];
 
     mockVerifyArtifact.mockResolvedValue({
@@ -318,7 +318,7 @@ describe('Artifact verification integration', () => {
 
   it('deduplicates glob results', async () => {
     mockMultilineInputs['files'] = ['dist/*.tar.gz', 'dist/app.tar.gz'];
-    mockInputs['token'] = '/tmp/bundle.json';
+    mockInputs['identity-bundle'] = '/tmp/bundle.json';
     // Glob returns the same file twice from two patterns
     mockGlobFiles = ['/workspace/dist/app.tar.gz', '/workspace/dist/app.tar.gz'];
 

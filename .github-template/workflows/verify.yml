@@ -1,0 +1,32 @@
+# Starter workflow — verify that every commit in a PR is cryptographically
+# signed with Auths. Copy this file to `.github/workflows/verify.yml` in your
+# repository.
+#
+# Docs: https://github.com/auths-dev/verify
+name: Verify Commits
+
+on:
+  pull_request:
+
+# Least privilege: verification only needs to read the repository.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history is required for commit verification
+
+      - uses: auths-dev/verify@v1   # or pin to a full commit SHA for stricter supply-chain hardening
+        with:
+          # Pin the CLI to a release that publishes a .sha256 — the action never
+          # resolves `latest` and fails closed if the binary can't be verified.
+          auths-version: "0.0.1-rc.12"
+          fail-on-unsigned: true
+
+          # Stateless CI (no ~/.auths on the runner)? Commit an identity bundle
+          # (public data) and pass it here:
+          # identity-bundle: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
