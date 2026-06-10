@@ -16,7 +16,7 @@ steps:
       fetch-depth: 0
   - uses: auths-dev/verify@v1
     with:
-      auths-version: "0.1.2"   # pin the CLI — the action never resolves `latest`
+      auths-version: "0.1.3"   # pin the CLI — the action never resolves `latest`
 ```
 
 That's it. The action auto-detects the commit range from the GitHub event (PR or push), downloads the **pinned** `auths` CLI (SHA256-checksum verified — it **fails closed** if the release has no checksum), and verifies each commit with `auths verify`. Verification is **KEL-native**: the signer is read from each commit's `Auths-Id`/`Auths-Device` trailers and checked against its key history (KEL). For stateless CI, pass an identity bundle via the `identity-bundle` input.
@@ -40,11 +40,11 @@ jobs:
           fetch-depth: 0
       - uses: auths-dev/verify@v1
         with:
-          auths-version: "0.1.2"   # pin the CLI version (required)
+          auths-version: "0.1.3"   # pin the CLI version (required)
           fail-on-unsigned: true
 ```
 
-> **Pin the CLI.** `auths-version` must be set to a released version that publishes a `.sha256` (e.g. `0.1.2`). The action refuses to resolve `latest` and fails closed if the binary cannot be checksum-verified — supply-chain hardening for a tool whose entire job is trust. (If `auths` is already on `PATH`, the version is not needed.)
+> **Pin the CLI.** `auths-version` must be set to a released version that publishes a `.sha256` (e.g. `0.1.3`). The action refuses to resolve `latest` and fails closed if the binary cannot be checksum-verified — supply-chain hardening for a tool whose entire job is trust. (If `auths` is already on `PATH`, the version is not needed.)
 
 That's it for verifying against the local identity store. For stateless CI (no `~/.auths` on the runner), commit an identity bundle and point the `identity-bundle` input at it — see [Identity Bundle](#identity-bundle-stateless-ci) below.
 
@@ -67,7 +67,7 @@ That's it for verifying against the local identity store. For stateless CI (no `
 |-------|-------------|----------|---------|
 | `identity-bundle` | Identity bundle for stateless verification. Accepts: CI token JSON, identity bundle JSON, or a file path to a bundle. Empty → KEL-native verification against the local identity store | No | `''` (KEL-native) |
 | `commits` | Git commit range to verify (e.g. `HEAD~5..HEAD`) | No | Auto-detected from event |
-| `auths-version` | Auths CLI version to **pin** (e.g. `0.1.2`). Required unless `auths` is on `PATH`; the action never resolves `latest` and fails closed without a verifiable `.sha256` | Yes (unless on PATH) | `''` |
+| `auths-version` | Auths CLI version to **pin** (e.g. `0.1.3`). Required unless `auths` is on `PATH`; the action never resolves `latest` and fails closed without a verifiable `.sha256` | Yes (unless on PATH) | `''` |
 | `fail-on-unsigned` | Whether to fail the action if unsigned commits are found | No | `true` |
 | `skip-merge-commits` | Whether to skip merge commits during verification | No | `true` |
 | `post-pr-comment` | Post a PR comment with results and fix instructions (requires `pull-requests: write`) | No | `false` |
@@ -99,7 +99,7 @@ With an empty `identity-bundle`, the action runs `auths verify` against the loca
 ```yaml
 - uses: auths-dev/verify@v1
   with:
-    auths-version: "0.1.2"   # pin the CLI (required on clean runners)
+    auths-version: "0.1.3"   # pin the CLI (required on clean runners)
 ```
 
 ### Identity Bundle (stateless CI)
@@ -115,7 +115,7 @@ Commit the bundle (it contains only public data) and reference the file:
 ```yaml
 - uses: auths-dev/verify@v1
   with:
-    auths-version: "0.1.2"
+    auths-version: "0.1.3"
     identity-bundle: '.auths/ci-bundle.json'
 ```
 
@@ -128,7 +128,7 @@ gh secret set AUTHS_IDENTITY_BUNDLE < .auths/ci-bundle.json
 ```yaml
 - uses: auths-dev/verify@v1
   with:
-    auths-version: "0.1.2"
+    auths-version: "0.1.3"
     identity-bundle: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
 ```
 
@@ -155,7 +155,7 @@ jobs:
 
       - uses: auths-dev/verify@v1
         with:
-          auths-version: "0.1.2"
+          auths-version: "0.1.3"
 ```
 
 ### Identity Bundle with Secret
@@ -174,7 +174,7 @@ jobs:
 
       - uses: auths-dev/verify@v1
         with:
-          auths-version: "0.1.2"
+          auths-version: "0.1.3"
           identity-bundle: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
 ```
 
@@ -183,7 +183,7 @@ jobs:
 ```yaml
 - uses: auths-dev/verify@v1
   with:
-    auths-version: "0.1.2"
+    auths-version: "0.1.3"
     fail-on-unsigned: 'false'
 ```
 
@@ -205,7 +205,7 @@ jobs:
 
       - uses: auths-dev/verify@v1
         with:
-          auths-version: "0.1.2"
+          auths-version: "0.1.3"
           post-pr-comment: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -217,7 +217,7 @@ jobs:
   id: verify
   uses: auths-dev/verify@v1
   with:
-    auths-version: "0.1.2"
+    auths-version: "0.1.3"
     fail-on-unsigned: 'false'
 
 - name: Gate a downstream step on verification
@@ -252,7 +252,7 @@ jobs:
 
       - uses: auths-dev/verify@v1
         with:
-          auths-version: "0.1.2"
+          auths-version: "0.1.3"
           identity-bundle: ${{ secrets.AUTHS_IDENTITY_BUNDLE }}
           fail-on-unsigned: ${{ inputs.mode == 'enforce' && 'true' || 'false' }}
 ```
