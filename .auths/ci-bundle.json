@@ -1,23 +1,46 @@
 {
-  "identity_did": "did:keri:ECHoDk6bcHtZm3rngCXNpANJNh-U-3Bd5bSO1YVx6Fac",
-  "public_key_hex": "025587d93658ed5be7be14027e3dae1f7312c968011faa45302abdf677a0c74b2a",
+  "identity_did": "did:keri:ELv6uW2irGkclnFq8lAsAexmoLwZ-3k-ocwjpFBZsIEG",
+  "public_key_hex": "02f7d33345c84176a48286539a7e74cdef1c266eb38e389711edb129fcc7938de0",
   "curve": "p256",
   "attestation_chain": [
     {
       "version": 1,
       "rid": ".auths",
-      "issuer": "did:keri:ECHoDk6bcHtZm3rngCXNpANJNh-U-3Bd5bSO1YVx6Fac",
-      "subject": "did:key:zDnaeWBqqznf8xyJhTAfc1RU4VFzUoRmw85G3hVdVS9mpLemP",
+      "issuer": "did:keri:ELv6uW2irGkclnFq8lAsAexmoLwZ-3k-ocwjpFBZsIEG",
+      "subject": "did:key:zDnaeh7NXw4vXWstkivGmQaBGZkoG4Fwp6uRAh6Khe5hXmUSj",
       "device_public_key": {
         "curve": "p256",
-        "key": "025587d93658ed5be7be14027e3dae1f7312c968011faa45302abdf677a0c74b2a"
+        "key": "02f7d33345c84176a48286539a7e74cdef1c266eb38e389711edb129fcc7938de0"
       },
-      "identity_signature": "d6776a5182df46bb646938d8416ed7ce3a2a9f55a841900c360d1e7190d3af7a5a5d8832dfad1bd43540cfeaba43df3f96c7a8f95ff8b970f6bdf71c878989c9",
-      "device_signature": "49d8c6dc15ad8d79f91bce2b9cb3533dd8cf4d3e12305641f0765f5624655812c549dcac07ad6a52f07e9fc41a3827db55f68069f9bd1bcc74feeb85197665c1",
-      "timestamp": "2026-06-03T17:32:34.460661Z",
+      "identity_signature": "b6fa3436b0fd03462ceb835f5184837f8f462ae96b91c30d0b5dcada0d99c5af6632567fe1af79264a96f9ae3fb2aa9f2dd56cb31329c8f79d0afe05d0afef36",
+      "device_signature": "7be8c0f9a26dd33d38b88e1911ad9b59b071c5eee02c3d0dd8b3faf6dd462f62fa17dd0bf8f6ad707e3818cbec8ae264af053a70f562d69036cf4a3873574f06",
+      "timestamp": "2026-06-09T22:01:42.838518Z",
       "note": "Linked by auths-sdk setup"
+    },
+    {
+      "version": 1,
+      "rid": "sha256:f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2",
+      "issuer": "did:keri:ELv6uW2irGkclnFq8lAsAexmoLwZ-3k-ocwjpFBZsIEG",
+      "subject": "did:key:zDnaeh7NXw4vXWstkivGmQaBGZkoG4Fwp6uRAh6Khe5hXmUSj",
+      "device_public_key": {
+        "curve": "p256",
+        "key": "02f7d33345c84176a48286539a7e74cdef1c266eb38e389711edb129fcc7938de0"
+      },
+      "identity_signature": "695e52d4641d6e1f86009bc89665d8e218e375b5a7402959909fb637c2c5e48b1268e718b5161301009b72100ba3c4ea5e4c1a3293c699a6860bb0edb31d94df",
+      "device_signature": "991ce277ffc5e57bd5ac7c274a871273cc8a6a8d6a3bcb867fb697d839ac8be1af76cf47ca0dc687feb8c06b354740edd7cd343da65ff3d871c2bb1974471754",
+      "timestamp": "2026-06-09T23:10:38.598909Z",
+      "payload": {
+        "artifact_type": "file",
+        "digest": {
+          "algorithm": "sha256",
+          "hex": "f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2"
+        },
+        "name": "relprobe.txt",
+        "size": 5
+      },
+      "commit_sha": "d4443cd81077f396ec1a1366bc0356cc19b3bbf5"
     }
   ],
-  "bundle_timestamp": "2026-06-09T19:49:11.207253Z",
+  "bundle_timestamp": "2026-06-10T00:02:16.144780Z",
   "max_valid_for_secs": 31536000
 }
