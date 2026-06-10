@@ -72219,7 +72219,7 @@ async function ensureAuthsInstalled(version) {
     // `releases/latest`, which would let an upstream release silently change the binary
     // a verification action runs. (A pre-installed `auths` on PATH is exempt — handled above.)
     if (!version) {
-        throw new Error("The 'auths-version' input must be pinned to a released version (e.g. '0.1.1'); " +
+        throw new Error("The 'auths-version' input must be pinned to a released version (e.g. '0.1.2'); " +
             "resolving 'latest' is not allowed for a verification action.");
     }
     // Determine the version for cache lookup
