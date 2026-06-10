@@ -18,7 +18,7 @@ jobs:
 
       - uses: ./
         with:
-          auths-version: '0.0.1-rc.12'
+          auths-version: '0.1.2'
           identity-bundle: .auths/ci-bundle.json
           fail-on-unsigned: true
           post-pr-comment: 'true'

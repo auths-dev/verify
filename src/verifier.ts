@@ -410,7 +410,7 @@ export async function ensureAuthsInstalled(version: string): Promise<string | nu
   // a verification action runs. (A pre-installed `auths` on PATH is exempt — handled above.)
   if (!version) {
     throw new Error(
-      "The 'auths-version' input must be pinned to a released version (e.g. '0.0.1-rc.12'); " +
+      "The 'auths-version' input must be pinned to a released version (e.g. '0.1.2'); " +
       "resolving 'latest' is not allowed for a verification action."
     );
   }
