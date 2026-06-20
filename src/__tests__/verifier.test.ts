@@ -1,4 +1,4 @@
-import { getAuthsDownloadUrl, getBinaryName, getCommitsInRange, verifyChecksum, ensureAuthsInstalled, verifyArtifact, classifyArtifactError, ArtifactVerificationResult } from '../verifier';
+import { getAuthsDownloadUrl, getBinaryName, getCommitsInRange, verifyChecksum, ensureAuthsInstalled, verifyArtifact, classifyArtifactError, ArtifactVerificationResult, processGpgResults, VerificationResult } from '../verifier';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -268,6 +268,55 @@ describe('verifyChecksum', () => {
 
     await expect(verifyChecksum('https://example.com/test.tar.gz', testFile))
       .rejects.toThrow('Refusing to run an unverified binary');
+  });
+});
+
+describe('processGpgResults', () => {
+  beforeEach(() => {
+    jest.resetAllMocks();
+  });
+
+  const gitReturning = (raw: string) =>
+    mockExec.exec.mockImplementation(async (_cmd: string, _args: string[], opts: any) => {
+      opts?.listeners?.stdout?.(Buffer.from(raw));
+      return 0;
+    });
+
+  it('does not flip a real failure to valid just because the error text contains "gpg"', async () => {
+    gitReturning('tree 0000\nauthor a <a@x> 1 +0000\n\nmsg\n'); // not pgp-signed
+    const results: VerificationResult[] = [
+      { commit: 'deadbeef', valid: false, error: 'invalid signature (gpg parser noise in a real failure)' }
+    ];
+
+    const [out] = await processGpgResults(results);
+
+    expect(out.valid).toBe(false);
+    expect(out.skipped).toBeFalsy();
+  });
+
+  it('skips a commit positively identified as PGP-signed', async () => {
+    gitReturning('tree 0000\ngpgsig -----BEGIN PGP SIGNATURE-----\n abc\n -----END PGP SIGNATURE-----\n\nmsg\n');
+    const results: VerificationResult[] = [
+      { commit: 'cafebabe', valid: false, error: 'no auths trailer' }
+    ];
+
+    const [out] = await processGpgResults(results);
+
+    expect(out.valid).toBe(true);
+    expect(out.skipped).toBe(true);
+    expect(out.skipReason).toMatch(/gpg/i);
+  });
+
+  it('does not skip a failing SSH-signed commit (in scope, must stay failed)', async () => {
+    gitReturning('tree 0000\ngpgsig -----BEGIN SSH SIGNATURE-----\n abc\n -----END SSH SIGNATURE-----\n\nmsg\n');
+    const results: VerificationResult[] = [
+      { commit: 'feedface', valid: false, error: 'signature verification failed' }
+    ];
+
+    const [out] = await processGpgResults(results);
+
+    expect(out.valid).toBe(false);
+    expect(out.skipped).toBeFalsy();
   });
 });
 

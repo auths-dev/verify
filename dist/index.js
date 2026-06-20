@@ -71878,6 +71878,8 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.classifyError = classifyError;
 exports.runPreflightChecks = runPreflightChecks;
 exports.verifyCommits = verifyCommits;
+exports.processGpgResults = processGpgResults;
+exports.isGpgSignedCommit = isGpgSignedCommit;
 exports.classifyArtifactError = classifyArtifactError;
 exports.verifyArtifact = verifyArtifact;
 exports.getCommitsInRange = getCommitsInRange;
@@ -72005,10 +72007,10 @@ async function verifyCommits(commitRange, options) {
         try {
             const parsed = JSON.parse(stdout.trim());
             if (Array.isArray(parsed)) {
-                verifyResults = processGpgResults(parsed);
+                verifyResults = await processGpgResults(parsed);
             }
             else {
-                verifyResults = processGpgResults([parsed]);
+                verifyResults = await processGpgResults([parsed]);
             }
         }
         catch (e) {
@@ -72029,22 +72031,55 @@ async function verifyCommits(commitRange, options) {
  * Process results to handle GPG-signed commits gracefully.
  * GPG-signed commits are marked as skipped rather than failed.
  */
-function processGpgResults(results) {
-    return results.map(result => {
-        if (!result.valid && result.error &&
-            result.error.toLowerCase().includes('gpg')) {
-            return {
+async function processGpgResults(results) {
+    const processed = [];
+    for (const result of results) {
+        if (!result.valid && (await isGpgSignedCommit(result.commit))) {
+            processed.push({
                 ...result,
                 valid: true,
                 skipped: true,
                 skipReason: 'GPG signature (not SSH)'
-            };
+            });
+            continue;
         }
         if (!result.valid && result.error && !result.failureType) {
-            return { ...result, failureType: classifyError(result.error) };
+            processed.push({ ...result, failureType: classifyError(result.error) });
+            continue;
         }
-        return result;
-    });
+        processed.push(result);
+    }
+    return processed;
+}
+/**
+ * Determine whether a commit carries a PGP (GPG) signature rather than an SSH one.
+ *
+ * Reads the raw commit object so the decision rests on the actual signature type,
+ * never on substring-matching a verification error. Only PGP-signed commits are the
+ * intentionally-unsupported kind that this action skips; SSH/KERI signatures are the
+ * ones it verifies, so a failure on those must stay a failure.
+ *
+ * Args:
+ * * `commit`: The commit SHA to inspect.
+ *
+ * Usage:
+ * ```ignore
+ * if (await isGpgSignedCommit(sha)) { /* skip — out of scope *\/ }
+ * ```
+ */
+async function isGpgSignedCommit(commit) {
+    let raw = '';
+    try {
+        await exec.exec('git', ['cat-file', '-p', commit], {
+            listeners: { stdout: (data) => { raw += data.toString(); } },
+            ignoreReturnCode: true,
+            silent: true
+        });
+    }
+    catch {
+        return false;
+    }
+    return /^gpgsig /m.test(raw) && raw.includes('-----BEGIN PGP SIGNATURE-----');
 }
 /**
  * Verify commits one by one (fallback method)
@@ -72077,7 +72112,7 @@ async function verifyCommitsOneByOne(authsPath, commits, options) {
         if (stdout.trim()) {
             try {
                 const result = JSON.parse(stdout.trim());
-                results.push(...processGpgResults([result]));
+                results.push(...(await processGpgResults([result])));
                 continue;
             }
             catch {
