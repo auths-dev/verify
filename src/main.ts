@@ -317,7 +317,7 @@ function fixMessageForType(type: FailureType, commit: string, _failedCount: numb
         `   ${signCmd}`,
         ``,
         `For CI to verify the signer, commit an identity bundle:`,
-        `   auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 31536000`,
+        `   auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 2592000`,
         ``,
         `Quickstart: https://github.com/auths-dev/auths#quickstart`,
       ].join('\n');
@@ -327,7 +327,7 @@ function fixMessageForType(type: FailureType, commit: string, _failedCount: numb
         `Commit ${commit.slice(0, 8)} is signed, but its signer could not be verified against the trusted identity.`,
         `Make sure the CI identity bundle is present and current, then pass it via the \`identity-bundle\` input:`,
         ``,
-        `   auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 31536000`,
+        `   auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 2592000`,
       ].join('\n');
 
     case 'invalid_signature':
@@ -431,7 +431,7 @@ export function buildSummaryMarkdown(
         lines.push('');
         lines.push('For CI to verify the signer, commit an identity bundle:');
         lines.push('```bash');
-        lines.push('auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 31536000');
+        lines.push('auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 2592000');
         lines.push('```');
         lines.push('');
         lines.push('[Quickstart →](https://github.com/auths-dev/auths#quickstart)');
@@ -440,7 +440,7 @@ export function buildSummaryMarkdown(
         lines.push(`Commit \`${firstFailed.commit.slice(0, 8)}\` is signed, but its signer could not be verified against the trusted identity.`);
         lines.push('Make sure the CI identity bundle is present and current, then pass it via the `identity-bundle` input:');
         lines.push('```bash');
-        lines.push('auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 31536000');
+        lines.push('auths id export-bundle --alias main --output .auths/ci-bundle.json --max-age-secs 2592000');
         lines.push('```');
         break;
       case 'invalid_signature':
