@@ -418,21 +418,24 @@ export async function ensureAuthsInstalled(version: string): Promise<string | nu
   // Determine the version for cache lookup
   const cacheVersion = version;
 
-  // Check tool cache
-  const cachedPath = tc.find('auths', cacheVersion);
-  if (cachedPath) {
-    const binaryPath = path.join(cachedPath, binaryName);
-    if (fs.existsSync(binaryPath)) {
-      core.info(`Using cached auths: ${binaryPath}`);
-      return binaryPath;
-    }
-  }
-
-  // Determine download URL early (needed for cache key)
+  // Determine the download URL early. It is needed both to download the binary and
+  // to re-verify any cached binary against the release checksum — the cache is
+  // untrusted, so a cache hit is not a substitute for verification.
   const downloadUrl = getAuthsDownloadUrl(version);
   if (!downloadUrl) {
     core.warning(`Cannot determine auths download URL for this platform (${os.platform()}/${os.arch()})`);
     return null;
+  }
+
+  // Check tool cache — re-verify before trusting it.
+  const cachedPath = tc.find('auths', cacheVersion);
+  if (cachedPath) {
+    const binaryPath = path.join(cachedPath, binaryName);
+    if (fs.existsSync(binaryPath)) {
+      await verifyChecksum(downloadUrl, binaryPath);
+      core.info(`Using cached auths: ${binaryPath}`);
+      return binaryPath;
+    }
   }
 
   // Try cross-run cache (only for pinned versions — "latest" can change between runs)
@@ -448,11 +451,18 @@ export async function ensureAuthsInstalled(version: string): Promise<string | nu
         core.info(`Restored auths from cache (key: ${cacheKey})`);
         const restoredBinary = path.join(cachePaths[0], binaryName);
         if (fs.existsSync(restoredBinary)) {
+          await verifyChecksum(downloadUrl, restoredBinary);
           const cachedDir = await tc.cacheDir(cachePaths[0], 'auths', cacheVersion);
           return path.join(cachedDir, binaryName);
         }
       }
     } catch (e) {
+      // A checksum failure on a restored binary means the cache entry was tampered
+      // with — surface it, never swallow it as a routine cache miss. Only genuine
+      // cache I/O errors fall through to a fresh, verified download.
+      if (e instanceof Error && /checksum|unverified binary/i.test(e.message)) {
+        throw e;
+      }
       core.debug(`Cache restore failed (non-fatal): ${e}`);
     }
   }

@@ -295,21 +295,70 @@ describe('ensureAuthsInstalled - cross-run caching', () => {
     }
   });
 
-  it('restores from cache on hit', async () => {
+  it('restores from cache on hit and re-verifies the binary', async () => {
     // Set up: cache restore returns a key hit with a binary on disk
     fs.mkdirSync(cachePath, { recursive: true });
-    fs.writeFileSync(path.join(cachePath, 'auths'), 'binary-content');
+    const cachedBinary = path.join(cachePath, 'auths');
+    fs.writeFileSync(cachedBinary, 'binary-content');
+
+    // A matching release checksum so the re-verification passes.
+    const checksumFile = path.join(realTmpdir, 'auths-cache-ok.sha256');
+    const hash = crypto.createHash('sha256').update(fs.readFileSync(cachedBinary)).digest('hex');
+    fs.writeFileSync(checksumFile, `${hash}  auths\n`);
 
     mockCache.restoreCache.mockResolvedValue('auths-bin-linux-x64-abc123');
+    mockTc.downloadTool.mockResolvedValue(checksumFile);
     mockTc.cacheDir.mockResolvedValue('/tool-cache/auths/0.5.0');
 
     const result = await ensureAuthsInstalled('0.5.0');
 
     expect(mockCache.restoreCache).toHaveBeenCalledTimes(1);
     expect(mockTc.cacheDir).toHaveBeenCalledWith(cachePath, 'auths', '0.5.0');
-    // Download should NOT be called
-    expect(mockTc.downloadTool).not.toHaveBeenCalled();
+    // The cached binary is re-verified against the release checksum before use.
+    expect(mockTc.downloadTool).toHaveBeenCalled();
     expect(result).toBe('/tool-cache/auths/0.5.0/auths');
+
+    if (fs.existsSync(checksumFile)) fs.rmSync(checksumFile);
+  });
+
+  it('re-verifies a cache hit and rejects a tampered binary (not trusted blind)', async () => {
+    // A cross-run cache hit whose restored binary does NOT match the release checksum.
+    fs.mkdirSync(cachePath, { recursive: true });
+    fs.writeFileSync(path.join(cachePath, 'auths'), 'tampered-binary');
+
+    mockCache.restoreCache.mockResolvedValue('auths-bin-linux-x64-abc123');
+    mockTc.cacheDir.mockResolvedValue('/tool-cache/auths/0.5.0');
+
+    // The release .sha256 does not match the tampered cached binary.
+    const checksumFile = path.join(realTmpdir, 'auths-cache-tampered.sha256');
+    fs.writeFileSync(
+      checksumFile,
+      'deadbeef00000000000000000000000000000000000000000000000000000000  auths\n'
+    );
+    mockTc.downloadTool.mockResolvedValue(checksumFile);
+
+    await expect(ensureAuthsInstalled('0.5.0')).rejects.toThrow(/checksum mismatch/i);
+
+    if (fs.existsSync(checksumFile)) fs.rmSync(checksumFile);
+  });
+
+  it('re-verifies a tool-cache hit and rejects a tampered binary', async () => {
+    const toolCacheDir = path.join(realTmpdir, 'auths-toolcache');
+    fs.mkdirSync(toolCacheDir, { recursive: true });
+    fs.writeFileSync(path.join(toolCacheDir, 'auths'), 'tampered-binary');
+    mockTc.find.mockReturnValue(toolCacheDir);
+
+    const checksumFile = path.join(realTmpdir, 'auths-toolcache-tampered.sha256');
+    fs.writeFileSync(
+      checksumFile,
+      'deadbeef00000000000000000000000000000000000000000000000000000000  auths\n'
+    );
+    mockTc.downloadTool.mockResolvedValue(checksumFile);
+
+    await expect(ensureAuthsInstalled('0.5.0')).rejects.toThrow(/checksum mismatch/i);
+
+    if (fs.existsSync(toolCacheDir)) fs.rmSync(toolCacheDir, { recursive: true });
+    if (fs.existsSync(checksumFile)) fs.rmSync(checksumFile);
   });
 
   it('downloads and saves to cache on miss', async () => {
