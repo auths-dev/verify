@@ -1,4 +1,4 @@
-import { getAuthsDownloadUrl, getBinaryName, getCommitsInRange, verifyChecksum, ensureAuthsInstalled, verifyArtifact, classifyArtifactError, ArtifactVerificationResult, processGpgResults, VerificationResult } from '../verifier';
+import { getAuthsDownloadUrl, getBinaryName, getCommitsInRange, verifyChecksum, ensureAuthsInstalled, verifyArtifact, classifyArtifactError, ArtifactVerificationResult, processGpgResults, VerificationResult, checkBundleFreshness } from '../verifier';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -317,6 +317,42 @@ describe('processGpgResults', () => {
 
     expect(out.valid).toBe(false);
     expect(out.skipped).toBeFalsy();
+  });
+});
+
+describe('checkBundleFreshness', () => {
+  const FIXED_NOW = new Date('2026-06-20T00:00:00Z').getTime();
+  const wellFormed = (overrides: Record<string, unknown> = {}) => ({
+    bundle_timestamp: new Date(FIXED_NOW - 1000).toISOString(), // 1s old
+    max_valid_for_secs: 86400,
+    ...overrides,
+  });
+
+  it('accepts a well-formed, in-window bundle', () => {
+    expect(checkBundleFreshness(wellFormed(), FIXED_NOW).fresh).toBe(true);
+  });
+
+  it('rejects a bundle missing max_valid_for_secs (no silent skip)', () => {
+    const { max_valid_for_secs, ...noTtl } = wellFormed();
+    expect(checkBundleFreshness(noTtl, FIXED_NOW).fresh).toBe(false);
+  });
+
+  it('rejects a bundle with a non-numeric max_valid_for_secs', () => {
+    expect(checkBundleFreshness(wellFormed({ max_valid_for_secs: 'forever' }), FIXED_NOW).fresh).toBe(false);
+  });
+
+  it('rejects a bundle missing or invalid bundle_timestamp', () => {
+    const { bundle_timestamp, ...noTs } = wellFormed();
+    expect(checkBundleFreshness(noTs, FIXED_NOW).fresh).toBe(false);
+    expect(checkBundleFreshness(wellFormed({ bundle_timestamp: 'not-a-date' }), FIXED_NOW).fresh).toBe(false);
+  });
+
+  it('rejects a genuinely stale bundle', () => {
+    const stale = wellFormed({
+      bundle_timestamp: new Date(FIXED_NOW - 200_000 * 1000).toISOString(),
+      max_valid_for_secs: 86400,
+    });
+    expect(checkBundleFreshness(stale, FIXED_NOW).fresh).toBe(false);
   });
 });
 

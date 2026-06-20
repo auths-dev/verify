@@ -52,6 +52,45 @@ export function classifyError(error: string): FailureType {
   return 'error';
 }
 
+/** Discriminated result of an identity-bundle freshness check. */
+export type BundleFreshness = { fresh: true } | { fresh: false; reason: string };
+
+/**
+ * Validate an identity bundle's shape and freshness, failing CLOSED.
+ *
+ * A bundle that does not carry a well-formed `bundle_timestamp` and a finite,
+ * non-negative numeric `max_valid_for_secs` cannot be freshness-checked, so it is
+ * rejected rather than silently trusted — a missing or malformed field must never
+ * skip the staleness check.
+ *
+ * Args:
+ * * `bundleJson`: The parsed bundle JSON (untrusted shape).
+ * * `nowMs`: The current time in epoch milliseconds.
+ *
+ * Usage:
+ * ```ignore
+ * const r = checkBundleFreshness(JSON.parse(content), Date.now());
+ * if (!r.fresh) core.setFailed(r.reason);
+ * ```
+ */
+export function checkBundleFreshness(bundleJson: unknown, nowMs: number): BundleFreshness {
+  const b = bundleJson as { bundle_timestamp?: unknown; max_valid_for_secs?: unknown };
+  const ts = b?.bundle_timestamp;
+  const tsMs = typeof ts === 'string' || typeof ts === 'number' ? new Date(ts).getTime() : NaN;
+  if (!Number.isFinite(tsMs)) {
+    return { fresh: false, reason: 'Identity bundle is malformed: missing or invalid `bundle_timestamp`.' };
+  }
+  const maxAge = b?.max_valid_for_secs;
+  if (typeof maxAge !== 'number' || !Number.isFinite(maxAge) || maxAge < 0) {
+    return { fresh: false, reason: 'Identity bundle is malformed: missing or invalid `max_valid_for_secs`.' };
+  }
+  const ageSeconds = (nowMs - tsMs) / 1000;
+  if (ageSeconds > maxAge) {
+    return { fresh: false, reason: `Bundle expired: ${Math.round(ageSeconds)}s old, max ${maxAge}s.` };
+  }
+  return { fresh: true };
+}
+
 export interface VerifyOptions {
   identityBundlePath: string;
   skipMergeCommits: boolean;

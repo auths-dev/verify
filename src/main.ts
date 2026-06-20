@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as glob from '@actions/glob';
-import { verifyCommits, verifyArtifact, VerifyOptions, VerificationResult, ArtifactVerificationResult, FailureType, ensureAuthsInstalled, runPreflightChecks } from './verifier';
+import { verifyCommits, verifyArtifact, VerifyOptions, VerificationResult, ArtifactVerificationResult, FailureType, ensureAuthsInstalled, runPreflightChecks, checkBundleFreshness } from './verifier';
 
 export interface ResolvedIdentity {
   mode: 'identity-bundle' | 'kel-native';
@@ -95,17 +95,24 @@ async function run(): Promise<void> {
       commitRange = await getDefaultCommitRange();
     }
 
-    // Enforce bundle TTL before invoking CLI verification
+    // Validate the bundle shape and enforce TTL before invoking CLI verification.
+    // A malformed bundle (bad JSON, or a missing/invalid timestamp or TTL) fails CLOSED.
     if (resolvedBundlePath) {
       const bundleContent = fs.readFileSync(resolvedBundlePath, 'utf8');
-      const bundleJson = JSON.parse(bundleContent);
-      const ageSeconds = (Date.now() - new Date(bundleJson.bundle_timestamp).getTime()) / 1000;
-      if (ageSeconds > bundleJson.max_valid_for_secs) {
+      let bundleJson: unknown;
+      try {
+        bundleJson = JSON.parse(bundleContent);
+      } catch {
+        core.setFailed('Identity bundle is not valid JSON — verification aborted');
+        return;
+      }
+      const freshness = checkBundleFreshness(bundleJson, Date.now());
+      if (!freshness.fresh) {
         core.error(
-          `Bundle expired: ${Math.round(ageSeconds)}s old, max ${bundleJson.max_valid_for_secs}s. ` +
-          `Refresh with: auths id export-bundle --alias <ALIAS> --output bundle.json --max-age-secs ${bundleJson.max_valid_for_secs}`
+          `${freshness.reason} ` +
+          `Refresh with: auths id export-bundle --alias <ALIAS> --output bundle.json --max-age-secs <SECONDS>`
         );
-        core.setFailed('Stale identity bundle — verification aborted');
+        core.setFailed('Identity bundle rejected — verification aborted');
         return;
       }
     }

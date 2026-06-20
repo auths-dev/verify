@@ -71425,15 +71425,23 @@ async function run() {
         if (!commitRange) {
             commitRange = await getDefaultCommitRange();
         }
-        // Enforce bundle TTL before invoking CLI verification
+        // Validate the bundle shape and enforce TTL before invoking CLI verification.
+        // A malformed bundle (bad JSON, or a missing/invalid timestamp or TTL) fails CLOSED.
         if (resolvedBundlePath) {
             const bundleContent = fs.readFileSync(resolvedBundlePath, 'utf8');
-            const bundleJson = JSON.parse(bundleContent);
-            const ageSeconds = (Date.now() - new Date(bundleJson.bundle_timestamp).getTime()) / 1000;
-            if (ageSeconds > bundleJson.max_valid_for_secs) {
-                core.error(`Bundle expired: ${Math.round(ageSeconds)}s old, max ${bundleJson.max_valid_for_secs}s. ` +
-                    `Refresh with: auths id export-bundle --alias <ALIAS> --output bundle.json --max-age-secs ${bundleJson.max_valid_for_secs}`);
-                core.setFailed('Stale identity bundle — verification aborted');
+            let bundleJson;
+            try {
+                bundleJson = JSON.parse(bundleContent);
+            }
+            catch {
+                core.setFailed('Identity bundle is not valid JSON — verification aborted');
+                return;
+            }
+            const freshness = (0, verifier_1.checkBundleFreshness)(bundleJson, Date.now());
+            if (!freshness.fresh) {
+                core.error(`${freshness.reason} ` +
+                    `Refresh with: auths id export-bundle --alias <ALIAS> --output bundle.json --max-age-secs <SECONDS>`);
+                core.setFailed('Identity bundle rejected — verification aborted');
                 return;
             }
         }
@@ -71876,6 +71884,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.classifyError = classifyError;
+exports.checkBundleFreshness = checkBundleFreshness;
 exports.runPreflightChecks = runPreflightChecks;
 exports.verifyCommits = verifyCommits;
 exports.processGpgResults = processGpgResults;
@@ -71912,6 +71921,41 @@ function classifyError(error) {
     if (e.includes('invalid') || e.includes('corrupt') || e.includes('bad signature'))
         return 'invalid_signature';
     return 'error';
+}
+/**
+ * Validate an identity bundle's shape and freshness, failing CLOSED.
+ *
+ * A bundle that does not carry a well-formed `bundle_timestamp` and a finite,
+ * non-negative numeric `max_valid_for_secs` cannot be freshness-checked, so it is
+ * rejected rather than silently trusted — a missing or malformed field must never
+ * skip the staleness check.
+ *
+ * Args:
+ * * `bundleJson`: The parsed bundle JSON (untrusted shape).
+ * * `nowMs`: The current time in epoch milliseconds.
+ *
+ * Usage:
+ * ```ignore
+ * const r = checkBundleFreshness(JSON.parse(content), Date.now());
+ * if (!r.fresh) core.setFailed(r.reason);
+ * ```
+ */
+function checkBundleFreshness(bundleJson, nowMs) {
+    const b = bundleJson;
+    const ts = b?.bundle_timestamp;
+    const tsMs = typeof ts === 'string' || typeof ts === 'number' ? new Date(ts).getTime() : NaN;
+    if (!Number.isFinite(tsMs)) {
+        return { fresh: false, reason: 'Identity bundle is malformed: missing or invalid `bundle_timestamp`.' };
+    }
+    const maxAge = b?.max_valid_for_secs;
+    if (typeof maxAge !== 'number' || !Number.isFinite(maxAge) || maxAge < 0) {
+        return { fresh: false, reason: 'Identity bundle is malformed: missing or invalid `max_valid_for_secs`.' };
+    }
+    const ageSeconds = (nowMs - tsMs) / 1000;
+    if (ageSeconds > maxAge) {
+        return { fresh: false, reason: `Bundle expired: ${Math.round(ageSeconds)}s old, max ${maxAge}s.` };
+    }
+    return { fresh: true };
 }
 /**
  * Run pre-flight checks before verification.
